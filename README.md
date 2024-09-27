@@ -4,7 +4,7 @@ The Data Migration Tool is designed to provide an efficient and flexible way to 
 
 # Features
 
-Multi-Database Support: Supports migration across MySQL, PostgreSQL, and MongoDB (with the ability to extend support for more databases).
+    Multi-Database Support: Supports migration across MySQL, PostgreSQL, and MongoDB (with the ability to extend support for more databases).
 
     Migration Modes:
       Full Migration: Migrate entire datasets from source to target.
@@ -101,14 +101,15 @@ Configuration
 You can customize the migration configuration in the config.json file:
 
 json
-{
-  "source": "mysql",
-  "source_uri": "username:password@tcp(localhost:3306)/source_db",
-  "target": "postgresql",
-  "target_uri": "username:password@tcp(localhost:5432)/target_db",
-  "migration_mode": "full",
-  "schedule": "0 2 * * *" // for scheduled migrations (cron format)
-}
+
+    {
+     "source": "mysql",
+     "source_uri": "username:password@tcp(localhost:3306)/source_db",
+     "target": "postgresql",
+     "target_uri": "username:password@tcp(localhost:5432)/target_db",
+     "migration_mode": "full",
+     "schedule": "0 2 * * *" // for scheduled migrations (cron format)
+    }
 
 # Logging and Error Handling
 
