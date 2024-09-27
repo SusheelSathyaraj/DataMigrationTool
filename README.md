@@ -6,13 +6,13 @@ The Data Migration Tool is designed to provide an efficient and flexible way to 
 
 Multi-Database Support: Supports migration across MySQL, PostgreSQL, and MongoDB (with the ability to extend support for more databases).
 
-Migration Modes:
-    Full Migration: Migrate entire datasets from source to target.
-    Incremental Migration: Sync only the modified data.
-    Scheduled Migration: Set migrations to run at specific intervals.
-    Real-time Progress Monitoring: Track the progress of your migration through a web-based dashboard or CLI.
-    Error Handling and Logging: Provides detailed logs and error recovery mechanisms to ensure smooth migration.
-    Validation: Pre- and post-migration validation to ensure data integrity.
+    Migration Modes:
+      Full Migration: Migrate entire datasets from source to target.
+      Incremental Migration: Sync only the modified data.
+      Scheduled Migration: Set migrations to run at specific intervals.
+      Real-time Progress Monitoring: Track the progress of your migration through a web-based dashboard or CLI.
+      Error Handling and Logging: Provides detailed logs and error recovery mechanisms to ensure smooth migration.
+      Validation: Pre- and post-migration validation to ensure data integrity.
     Secure Migration: Securely handles sensitive data with encryption and safe logging.
 
 # Tech Stack
@@ -36,7 +36,8 @@ How It Works
     Monitor: Track progress in real-time and view logs in case of errors.
     Validation: Post-migration, run validation scripts to ensure all data has been transferred correctly.
 
-Installation
+# Installation
+
 Prerequisites
 
     Go 1.18+
@@ -44,53 +45,48 @@ Prerequisites
     Docker (optional for containerization)
     MySQL, PostgreSQL, or MongoDB installed locally or available via a connection URL.
 
-Steps:
+# Steps:
 
-    Clone the Repository:
+Clone the Repository:
 
     bash
-
-git clone https://github.com/yourusername/data-migration-tool.git
-cd data-migration-tool
+    git clone https://github.com/yourusername/data-migration-tool.git
+    cd data-migration-tool
 
 Set Up Environment Variables: Create a .env file in the project root and configure your database credentials:
 
-bash
-
-DB_SOURCE=mysql
-DB_SOURCE_URI=username:password@tcp(localhost:3306)/source_db
-DB_TARGET=postgresql
-DB_TARGET_URI=username:password@tcp(localhost:5432)/target_db
+    bash
+    DB_SOURCE=mysql
+    DB_SOURCE_URI=username:password@tcp(localhost:3306)/source_db
+    DB_TARGET=postgresql
+    DB_TARGET_URI=username:password@tcp(localhost:5432)/target_db
 
 Run Backend: To build and run the Golang backend:
 
-bash
-
-go mod tidy
-go run main.go
+    bash
+    go mod tidy
+    go run main.go
 
 Optional: Run Frontend: If using the frontend, navigate to the frontend/ folder and run:
 
-bash
-
-cd frontend
-npm install
-npm start
+    bash
+    cd frontend
+    npm install
+    npm start
 
 Docker Setup (Optional): To run the application inside a Docker container:
 
-bash
-
+    bash
     docker-compose up --build
 
-Usage
+# Usage
+
 CLI Mode:
 
 You can run migrations directly via the CLI:
 
-bash
-
-go run main.go --source mysql --target postgresql --mode full
+    bash
+    go run main.go --source mysql --target postgresql --mode full
 
     Source: Specify the source database (mysql, postgresql, mongodb).
     Target: Specify the target database (mysql, postgresql, mongodb).
@@ -105,7 +101,6 @@ Configuration
 You can customize the migration configuration in the config.json file:
 
 json
-
 {
   "source": "mysql",
   "source_uri": "username:password@tcp(localhost:3306)/source_db",
@@ -115,19 +110,18 @@ json
   "schedule": "0 2 * * *" // for scheduled migrations (cron format)
 }
 
-Logging and Error Handling
+# Logging and Error Handling
 
 All logs are stored in the /logs directory and are rotated daily to ensure easy tracking. Errors are logged with detailed stack traces to help identify issues during migration.
-Testing
+
+# Testing
 
 Unit tests are provided for the critical components of the migration process. To run tests:
 
-bash
+    bash
+    go test ./...
 
-go test ./...
-
-Ensure you have mock databases set up for testing purposes.
-Contributing
+# Contributing
 
 Contributions are welcome! Please follow these steps:
 
