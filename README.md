@@ -1,24 +1,32 @@
 # Overview
 
-The Data Migration Tool is designed to provide an efficient and flexible way to migrate data between different databases and formats. Whether you need to transfer data between `MySQL` and `PostgreSQL`, sync CSV files to a database, or schedule incremental migrations, this tool offers a robust solution for all your migration needs.
+The Data Migration Tool is a flexible and efficient solution for migrating data across different databases and formats. It supports seamless transfers between `MySQL`, `PostgreSQL`, and `MongoDB`, along with `CSV-to-database` synchronization. This tool ensures data integrity, real-time progress tracking, and robust error handling, making it ideal for enterprise-level migrations.
 
 # Features
 
-    Multi-Database Support: Supports migration across MySQL, PostgreSQL, and MongoDB (with the ability to extend support for more databases).
+    Multi-Database Support: 
+      Supports migration across MySQL, PostgreSQL, and MongoDB.
+      Extendable to other databases via additional connectors.
 
     Migration Modes:
       Full Migration: Migrate entire datasets from source to target.
       Incremental Migration: Sync only the modified data.
-      Scheduled Migration: Set migrations to run at specific intervals.
+      Scheduled Migration: Set migrations to run at specific intervals(cron schedules).
+    
+    Advanced Monitoring and Logging:
       Real-time Progress Monitoring: Track the progress of your migration through a web-based dashboard or CLI.
       Error Handling and Logging: Provides detailed logs and error recovery mechanisms to ensure smooth migration.
       Validation: Pre- and post-migration validation to ensure data integrity.
-    Secure Migration: Securely handles sensitive data with encryption and safe logging.
+    
+    Secure Migration: 
+      Encryption to protect sensitive data during migration. 
+      Safe Logging to avoid exposure of confidential details.
 
 # Tech Stack
 
-    Backend: Golang (Go)
-        Database drivers: mysql, pq (PostgreSQL), and mongo-go-driver for MongoDB.
+    Backend: 
+        Golang (Go)
+        Database drivers: mysql, pgx (PostgreSQL), and mongo-go-driver for MongoDB.
         Logging: Logrus or Zap for structured logging.
         Concurrency: Golang’s goroutines for handling large data migrations efficiently.
     Frontend (Optional): TypeScript with React (for web-based interface).
