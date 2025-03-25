@@ -89,7 +89,7 @@ Docker Setup (Optional): To run the application inside a Docker container:
 
 # Usage
 
-CLI Mode:
+## CLI Mode:
 
 You can run migrations directly via the CLI:
 
@@ -100,9 +100,30 @@ You can run migrations directly via the CLI:
     Target: Specify the target database (mysql, postgresql, mongodb).
     Mode: Choose from full, incremental, or scheduled.
 
-Web Interface (Optional):
+## Web Interface (Optional):
 
     Open the dashboard in your browser to track real-time progress, initiate new migrations, and configure settings.
+
+## REST API (Optional)
+
+This tool also provides a REST API to trigger and monitor migrations.
+
+### **Endpoints**
+| HTTP Method | Endpoint          | Description |
+|------------|------------------|-------------|
+| `POST`     | `/migrate`        | Start a migration |
+| `GET`      | `/status/{id}`     | Check migration status |
+| `GET`      | `/logs/{id}`       | View migration logs |
+| `DELETE`   | `/cancel/{id}`     | Cancel a migration |
+
+### **Example Usage**
+
+#### **Start a Migration**
+```sh
+curl -X POST http://localhost:8080/migrate \
+     -H "Content-Type: application/json" \
+     -d '{"source": "mysql", "target": "postgresql", "mode": "full"}'
+
 
 Configuration
 
