@@ -30,7 +30,15 @@ func validateInput(source, target, mode string) error {
 	if source == target {
 		return fmt.Errorf("source: %s and target: %s are the same ", source, target)
 	}
-	return nil
+
+	//validating migration modes
+	validmodes := []string{"full", "incremental", "scheduled"}
+	for _, v := range validmodes {
+		if strings.EqualFold(v, mode) {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid mode: %s", mode)
 }
 
 func isValidDatabase(db string, slice []string) bool {
