@@ -94,11 +94,14 @@ Docker Setup (Optional): To run the application inside a Docker container:
 You can run migrations directly via the CLI:
 
     bash
-    go run main.go --source mysql --target postgresql --mode full
+    go run main.go --source=mysql --target=postgresql --mode=full
+    (full being the default mode)
+    (OR)
+    make run ARGS="--source=mysql --target=postgresql --mode=full"
 
     Source: Specify the source database (mysql, postgresql, mongodb).
     Target: Specify the target database (mysql, postgresql, mongodb).
-    Mode: Choose from full, incremental, or scheduled.
+    Mode: Choose from (full, incremental, scheduled).
 
 ## Web Interface (Optional):
 
