@@ -25,6 +25,11 @@ func validateInput(source, target, mode string) error {
 	if !isValidDatabase(target, supportedDatabases) {
 		return fmt.Errorf("invalid target database type %s", target)
 	}
+
+	//check if source and target are the same
+	if source == target {
+		return fmt.Errorf("source: %s and target: %s are the same ", source, target)
+	}
 	return nil
 }
 
