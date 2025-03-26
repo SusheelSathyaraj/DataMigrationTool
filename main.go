@@ -54,7 +54,7 @@ func main() {
 	//defining CLI for user input
 	sourceDB := flag.String("source", "", "Source Database type(mysql,postgresql,mongodb)")
 	targetDB := flag.String("target", "", "Target Database type (mysql,postgresql,mongodb)")
-	mode := flag.String("mode", "", "Migration mode(full,incremental,scheduled)")
+	mode := flag.String("mode", "full", "Migration mode(full,incremental,scheduled)")
 	//filetype := flag.String("filetype", "", "Format (csv,json,xml)")
 	//filetype to be added later
 
