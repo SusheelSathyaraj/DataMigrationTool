@@ -9,4 +9,5 @@ clean: vet
 build: clean
 	go build -o binary
 run: build
-	./binary
+	@echo "Running binary with arguments: $(ARGS)"
+	./binary $(ARGS)
