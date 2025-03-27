@@ -98,6 +98,8 @@ You can run migrations directly via the CLI:
     (full being the default mode)
     (OR)
     make run ARGS="--source=mysql --target=postgresql --mode=full"
+    make test ARGS="--source=mysql --target=postgresql --mode=full"
+    (to run all tests)
 
     Source: Specify the source database (mysql, postgresql, mongodb).
     Target: Specify the target database (mysql, postgresql, mongodb).
