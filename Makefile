@@ -1,9 +1,9 @@
 .DEFAULT_GOAL := build
-.PHONY : fmt vet clean build run
+.PHONY : fmt vet clean build run test
 fmt:
-	go fmt
+	go fmt ./...
 vet: fmt
-	go vet
+	go vet ./...
 clean: vet
 	go clean
 build: clean
@@ -11,3 +11,5 @@ build: clean
 run: build
 	@echo "Running binary with arguments: $(ARGS)"
 	./binary $(ARGS)
+test: run
+	go test -v ./...
