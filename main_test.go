@@ -32,3 +32,27 @@ func TestValidateInput(t *testing.T) {
 		}
 	}
 }
+
+// tests isValidDatabase function
+func TestIsValidDatabase(t *testing.T) {
+	tests := []struct {
+		db     string
+		slice  []string
+		expect bool
+	}{
+		{"mysql", []string{"mysql", "postgresql", "mongodb"}, true},
+		{"POSTGRESQL", []string{"mysql", "postgresql", "mongodb"}, true},
+		{"MongoDb", []string{"mysql", "postgresql", "mongodb"}, true},
+		{"mysq", []string{"mysql", "postgresql", "mongodb"}, false},
+		{"", []string{"mysql", "postgresql", "mongodb"}, false},
+		{"", []string{"mysql", "postgresql"}, false},
+		{"", []string{}, false},
+	}
+
+	for i, tc := range tests {
+		err := isValidDatabase(tc.db, tc.slice)
+		if (err) != tc.expect {
+			t.Errorf("Test case: %d, for isValidDatabase(%s,%v) has %v, Error: %v", i+1, tc.db, tc.slice, tc.expect, err)
+		}
+	}
+}
