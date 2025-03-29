@@ -3,8 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+
+	"github.com/SusheelSathyaraj/DataMigrationTool/database"
 )
 
 // supported database formats
@@ -69,4 +72,13 @@ func main() {
 	}
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
+
+	//checking the connection to mysql database
+	fmt.Println("\n Attempting to connect to MySQL database...")
+	db, err := database.ConnectMySQL()
+	if err != nil {
+		log.Fatalf("connection failed %v", err)
+	}
+	defer db.Close()
+	fmt.Println("Connection Successful")
 }
