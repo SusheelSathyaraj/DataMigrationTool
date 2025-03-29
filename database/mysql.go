@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func ConnectMySQL() (*sql.DB, error) {
-	fmt.Println("Connecting to the MySQL database")
-
 	//getting cred from environment variables
 	user := os.Getenv("MYSQL_USER")
 	password := os.Getenv("MYSQL_PASS")
