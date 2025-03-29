@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/SusheelSathyaraj/DataMigrationTool/config"
 )
 
 // supported database formats
@@ -69,4 +71,7 @@ func main() {
 	}
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
+
+	//checking if the env files are set
+	fmt.Println("random env details", config.GetEnv("MYSQL_PASS"), config.GetEnv("PG_PORT"))
 }
