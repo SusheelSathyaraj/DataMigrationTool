@@ -81,4 +81,12 @@ func main() {
 	}
 	defer db.Close()
 	fmt.Println("Connection Successful")
+
+	//checking the fetch functionality of the mysql database
+	fmt.Println("\n Fetching data from the mysql database...")
+	data, err := database.FetchData(db)
+	if err != nil {
+		log.Fatalf("failed to fetch data %v", err)
+	}
+	fmt.Printf("Fetched data is: %v", data)
 }
