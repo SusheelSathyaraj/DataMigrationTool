@@ -2,9 +2,13 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestMySQLConnection(t *testing.T) {
@@ -37,4 +41,80 @@ func TestMySQLConnection(t *testing.T) {
 	}
 
 	t.Log("Successfully connected to MySQL database")
+}
+
+// Test cases for FetchData method
+func TestMySQLFetchData_Success(t *testing.T) {
+	//successful execution of fetchdata
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Error creating mock database %v", err)
+	}
+	defer db.Close()
+
+	//simulate dynamic schema
+	columnName := []string{"col1", "col2", "col3", "col4"} //simulate arbitrary columns
+	mockRows := sqlmock.NewRows(columnName).AddRow(1, "Alice", 25, 50000).AddRow(2, "Alex", 26, 65000).AddRow(3, "Susheel", 37, 100000).AddRow(4, "Fahad", 36, 150000)
+
+	mock.ExpectQuery("SELECT /* FROM .*;").WillReturnRows(mockRows) //returns from all tables, generic query
+
+	//call fetchdata func
+	data, err := FetchData(db)
+
+	//Assertions
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if len(data) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(data))
+	}
+}
+
+func TestMySQLFetchData_EmptyTable(t *testing.T) {
+	//testing when no rows exist
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("error creating mock database %v", err)
+	}
+	defer db.Close()
+
+	//simulate dynamic schema
+	columnName := []string{"col1", "col2", "col3", "col4"}
+	mockRows := sqlmock.NewRows(columnName)
+
+	//query execution
+	mock.ExpectQuery("SELECT //* FROM .*").WillReturnRows(mockRows)
+
+	data, err := FetchData(db)
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if len(data) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(data))
+	}
+}
+
+// Testing error scenarios
+func TestMySQLFetchData_Error(t *testing.T) {
+	//mock database
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Errorf("error creating a mock database %v", err)
+	}
+	defer db.Close()
+
+	//mock query failure
+	mock.ExpectQuery("SELECT //* FROM .*").WillReturnError(errors.New("query failed!!"))
+
+	//calling fetchdata func
+	data, err := FetchData(db)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	if len(data) != 0 {
+		t.Errorf("expected 0 rows, but got %d", len(data))
+	}
 }

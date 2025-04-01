@@ -30,62 +30,73 @@ func ConnectMySQL() (*sql.DB, error) {
 }
 
 // retreives data from the mysql table and returns it has a slice of maps
-func FetchData(db *sql.DB) ([]map[string]interface{}, error) {
+func FetchData(db *sql.DB, sqlFilepath string) ([]map[string]interface{}, error) {
+	//Extracting table names from the sql file provided
+	tableNames, err := ExtractTableNamesFromSQLFile(sqlFilepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract table names %v", err)
+	}
+
+	if len(tableNames) == 0 {
+		return nil, fmt.Errorf("no tables found in the sql file, %v", err)
+	}
+
+	var allResults []map[string]interface{}
+
 	//to do, make this query generic so that hardcoding can be avoided,
-	query := "SELECT * FROM Employees;" // using 'users' as the hardcoded table name
+	for _, tableName := range tableNames {
+		query := "SELECT * FROM Employees;" // using 'users' as the hardcoded table name
 
-	//execute query
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute the query %v", err)
-	}
-	defer rows.Close()
+		//execute query
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute the query %v", err)
+		}
+		defer rows.Close()
 
-	//get column names
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get column names %v", err)
-	}
-
-	// store results in slice
-	var results []map[string]interface{}
-
-	//Iterating through the rows
-	for rows.Next() {
-		//placeholder interfaces to store values
-		values := make([]interface{}, len(columns))
-		valuesPtr := make([]interface{}, len(columns))
-
-		//storing corresponding pointer values as row.Scan() works only on pointers
-		for i := range values {
-			valuesPtr[i] = &values[i]
+		//get column names
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get column names %v", err)
 		}
 
-		//scan the rows into the valuePtr
-		//valuesPtr... expands the slice into individual args
-		if err := rows.Scan(valuesPtr...); err != nil {
-			return nil, fmt.Errorf("failed to scan the row %v", err)
-		}
+		//Iterating through the rows
+		for rows.Next() {
+			//placeholder interfaces to store values
+			values := make([]interface{}, len(columns))
+			valuesPtr := make([]interface{}, len(columns))
 
-		//create a new map to store the scanned data of the current row
-		rowMap := make(map[string]interface{})
-
-		//add column values for this row
-		for i, colName := range columns {
-			val := values[i]
-
-			//check to see if some values are in bytes, if yes convert them to string
-			if b, ok := val.([]byte); ok {
-				rowMap[colName] = string(b)
-			} else {
-				rowMap[colName] = val
+			//storing corresponding pointer values as row.Scan() works only on pointers
+			for i := range values {
+				valuesPtr[i] = &values[i]
 			}
-		}
 
-		//appending the row to results
-		results = append(results, rowMap)
+			//scan the rows into the valuePtr
+			//valuesPtr... expands the slice into individual args
+			if err := rows.Scan(valuesPtr...); err != nil {
+				return nil, fmt.Errorf("failed to scan the row %v", err)
+			}
+
+			//create a new map to store the scanned data of the current row
+			rowMap := make(map[string]interface{})
+
+			//add column values for this row
+			for i, colName := range columns {
+				val := values[i]
+
+				//check to see if some values are in bytes, if yes convert them to string
+				if b, ok := val.([]byte); ok {
+					rowMap[colName] = string(b)
+				} else {
+					rowMap[colName] = val
+				}
+			}
+
+			//appending the row to results
+			allResults = append(allResults, rowMap)
+		}
 	}
 
 	//return all rows
-	return results, nil
+	return allResults, nil
 }
