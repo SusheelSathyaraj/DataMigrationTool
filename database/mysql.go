@@ -3,19 +3,11 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func ConnectMySQL() (*sql.DB, error) {
-	//getting cred from environment variables
-	user := os.Getenv("MYSQL_USER")
-	password := os.Getenv("MYSQL_PASS")
-	dbname := os.Getenv("MYSQL_NAME")
-	port := os.Getenv("MYSQL_PORT")
-	host := os.Getenv("MYSQL_HOST")
-
+func ConnectMySQL(user, password, host string, port int, dbname string) (*sql.DB, error) {
 	// DSN for MySQL
 	//format: user:password@tcp(host:port)/name
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, dbname)
