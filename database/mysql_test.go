@@ -40,7 +40,7 @@ func TestMySQLConnection(t *testing.T) {
 	}
 
 	//Creating DSN for MySQL
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbuser, dbpass, dbhost, dbport, dbname)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbuser, dbpass, dbhost, dbport, dbname)
 
 	// Attempting to open connection to MySQL
 	db, err := sql.Open("mysql", dsn)
