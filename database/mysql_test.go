@@ -27,16 +27,15 @@ func TestMain(m *testing.M) {
 }
 
 func TestMySQLConnection(t *testing.T) {
-	//Ensure environment variables are all fetched
-
-	dbuser := os.Getenv("MYSQL_USER")
-	dbpass := os.Getenv("MYSQL_PASS")
-	dbname := os.Getenv("MYSQL_NAME")
-	dbhost := os.Getenv("MYSQL_HOST")
-	dbport := os.Getenv("MYSQL_PORT")
+	//Get creds from the config file
+	dbuser := cfg.Database.User
+	dbpass := cfg.Database.Password
+	dbname := cfg.Database.DBName
+	dbhost := cfg.Database.Host
+	dbport := cfg.Database.Port
 
 	//if any env variable is missing, skip test
-	if dbuser == "" || dbpass == "" || dbname == "" || dbhost == "" || dbport == "" {
+	if dbuser == "" || dbpass == "" || dbname == "" || dbhost == "" || dbport == 0 {
 		t.Skip("Skipping Tests: All of the Environment Variables must be present")
 	}
 
@@ -74,7 +73,7 @@ func TestMySQLFetchData_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT /* FROM .*;").WillReturnRows(mockRows) //returns from all tables, generic query
 
 	//call fetchdata func
-	data, err := FetchData(db)
+	data, err := FetchData(db, cfg.FilePath)
 
 	//Assertions
 	if err != nil {
@@ -101,7 +100,7 @@ func TestMySQLFetchData_EmptyTable(t *testing.T) {
 	//query execution
 	mock.ExpectQuery("SELECT //* FROM .*").WillReturnRows(mockRows)
 
-	data, err := FetchData(db)
+	data, err := FetchData(db, cfg.FilePath)
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}
@@ -124,7 +123,7 @@ func TestMySQLFetchData_Error(t *testing.T) {
 	mock.ExpectQuery("SELECT //* FROM .*").WillReturnError(errors.New("query failed!!"))
 
 	//calling fetchdata func
-	data, err := FetchData(db)
+	data, err := FetchData(db, cfg.FilePath)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
