@@ -4,12 +4,27 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/SusheelSathyaraj/DataMigrationTool/config"
 	_ "github.com/go-sql-driver/mysql"
 )
+
+var cfg *config.Config
+
+func TestMain(m *testing.M) {
+	//Loading configuration
+	var err error
+	cfg, err = config.LoadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Error loading the config file, %v", err)
+	}
+	//run tests
+	os.Exit(m.Run())
+}
 
 func TestMySQLConnection(t *testing.T) {
 	//Ensure environment variables are all fetched
