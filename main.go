@@ -89,4 +89,5 @@ func main() {
 		log.Fatalf("failed to fetch data %v", err)
 	}
 	fmt.Printf("Fetched data is: %v", data)
+
 }
