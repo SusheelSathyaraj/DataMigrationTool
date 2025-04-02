@@ -3,14 +3,35 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"regexp"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
+func ExtractTableNamesFromSQLFile(filepath string) ([]string, error) {
+	content, err := os.ReadFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the SQL file, %v", err)
+	}
+
+	//regex to match "CREATE TABLE "table_name"
+	re := regexp.MustCompile(`(?i)CREATE TABLE (\w+)`)
+	matches := re.FindAllStringSubmatch(string(content), -1)
+
+	var tableNames []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			tableNames = append(tableNames, match[1])
+		}
+	}
+	return tableNames, nil
+}
+
 func ConnectMySQL(user, password, host string, port int, dbname string) (*sql.DB, error) {
 	// DSN for MySQL
 	//format: user:password@tcp(host:port)/name
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, dbname)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", user, password, host, port, dbname)
 
 	//open connection
 	db, err := sql.Open("mysql", dsn)
@@ -37,12 +58,12 @@ func FetchData(db *sql.DB, sqlFilepath string) ([]map[string]interface{}, error)
 
 	//to do, make this query generic so that hardcoding can be avoided,
 	for _, tableName := range tableNames {
-		query := "SELECT * FROM Employees;" // using 'users' as the hardcoded table name
+		query := fmt.Sprintf("SELECT * FROM %s;", tableName) // using 'users' as the hardcoded table name
 
 		//execute query
 		rows, err := db.Query(query)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute the query %v", err)
+			return nil, fmt.Errorf("failed to execute the query on table %s, %v", tableName, err)
 		}
 		defer rows.Close()
 
