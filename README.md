@@ -61,7 +61,7 @@ Clone the Repository:
     git clone https://github.com/yourusername/data-migration-tool.git
     cd data-migration-tool
 
-Set Up Environment Variables: Create a .env file in the project root and configure your database credentials:
+Set Up Environment Variables: Create a config.yaml file in the project root and configure your database credentials:
 
     bash
     DB_SOURCE=mysql

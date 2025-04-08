@@ -3,8 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+
+	"github.com/SusheelSathyaraj/DataMigrationTool/config"
+
+	"github.com/SusheelSathyaraj/DataMigrationTool/database"
 )
 
 // supported database formats
@@ -51,6 +56,12 @@ func isValidDatabase(db string, slice []string) bool {
 }
 
 func main() {
+	//Loading config from config.yaml
+	cfg, err := config.LoadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Error loading config %v", err)
+	}
+
 	//defining CLI for user input
 	sourceDB := flag.String("source", "", "Source Database type(mysql,postgresql,mongodb)")
 	targetDB := flag.String("target", "", "Target Database type (mysql,postgresql,mongodb)")
@@ -69,5 +80,22 @@ func main() {
 	}
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
+
+	//checking the connection to mysql database
+	fmt.Println("\n Attempting to connect to MySQL database...")
+	db, err := database.ConnectMySQL(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
+	if err != nil {
+		log.Fatalf("connection failed %v", err)
+	}
+	defer db.Close()
+	fmt.Println("Connection Successful")
+
+	//checking the fetch functionality of the mysql database
+	fmt.Println("\n Fetching data from the mysql database...")
+	data, err := database.FetchData(db, cfg.FilePath)
+	if err != nil {
+		log.Fatalf("failed to fetch data %v", err)
+	}
+	fmt.Printf("Fetched data is: %v", data)
 
 }
