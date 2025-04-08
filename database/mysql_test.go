@@ -18,7 +18,7 @@ var cfg *config.Config
 func TestMain(m *testing.M) {
 	//Loading configuration
 	var err error
-	cfg, err = config.LoadConfig("config.yaml")
+	cfg, err = config.LoadConfig("../config.yaml")
 	if err != nil {
 		log.Fatalf("Error loading the config file, %v", err)
 	}
@@ -70,7 +70,7 @@ func TestMySQLFetchData_Success(t *testing.T) {
 	columnName := []string{"col1", "col2", "col3", "col4"} //simulate arbitrary columns
 	mockRows := sqlmock.NewRows(columnName).AddRow(1, "Alice", 25, 50000).AddRow(2, "Alex", 26, 65000).AddRow(3, "Susheel", 37, 100000).AddRow(4, "Fahad", 36, 150000)
 
-	mock.ExpectQuery("SELECT /* FROM .*;").WillReturnRows(mockRows) //returns from all tables, generic query
+	mock.ExpectQuery("SELECT \\* FROM .*;").WillReturnRows(mockRows) //returns from all tables, generic query
 
 	//call fetchdata func
 	data, err := FetchData(db, cfg.FilePath)
