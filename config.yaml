@@ -5,4 +5,4 @@ database:
   password: "Password"
   dbname: "migration_tool"
 
-file_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
+file_path: "/home/susheel/learning/go/src/Work/datamigrationtool/migration_tool.sql"
