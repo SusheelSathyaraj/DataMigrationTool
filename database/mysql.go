@@ -58,7 +58,7 @@ func FetchData(db *sql.DB, sqlFilepath string) ([]map[string]interface{}, error)
 
 	//to do, make this query generic so that hardcoding can be avoided,
 	for _, tableName := range tableNames {
-		query := fmt.Sprintf("SELECT * FROM %s;", tableName) // using 'users' as the hardcoded table name
+		query := fmt.Sprintf("SELECT * FROM %s;", tableName)
 
 		//execute query
 		rows, err := db.Query(query)
