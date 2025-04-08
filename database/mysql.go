@@ -9,6 +9,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+type MySQLMigration struct {
+	DB *sql.DB
+}
+
 func ExtractTableNamesFromSQLFile(filepath string) ([]string, error) {
 	content, err := os.ReadFile(filepath)
 	if err != nil {
@@ -112,4 +116,16 @@ func FetchData(db *sql.DB, sqlFilepath string) ([]map[string]interface{}, error)
 
 	//return all rows
 	return allResults, nil
+}
+
+func (m *MySQLMigration) MigrateData(data []map[string]interface{}, target TargetDatabase) error {
+	if target == nil {
+		return fmt.Errorf("target Database is nil")
+	}
+	err := target.InsertData(data)
+	if err == nil {
+		return fmt.Errorf("failed to insert data into the target database, %v", err)
+	}
+	fmt.Println("Data successfully migrated to the target database")
+	return nil
 }
