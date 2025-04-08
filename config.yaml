@@ -1,8 +1,8 @@
 database:
   host: "localhost"
   port: 3306
-  user: "user"
-  password: "Password"
-  dbname: "migration_tool"
+  user: "root"
+  password: "root"
+  dbname: "classicmodels"
 
-file_path: "/home/susheel/learning/go/src/Work/datamigrationtool/migration_tool.sql"
+file_path: "/home/susheel/learning/go/src/Work/datamigrationtool/mysqlsampledatabase.sql"
