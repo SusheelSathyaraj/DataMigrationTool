@@ -1,8 +1,15 @@
-database:
+mysql:
   host: "localhost"
   port: 3306
   user: "root"
   password: "root"
   dbname: "classicmodels"
 
-sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool/mysqlsampledatabase.sql"
+postgresql:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "Password"
+  dbname: "migration_postgres"
+
+sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
