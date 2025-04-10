@@ -6,6 +6,8 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/SusheelSathyaraj/DataMigrationTool/config"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -32,10 +34,10 @@ func ExtractTableNamesFromSQLFile(filepath string) ([]string, error) {
 	return tableNames, nil
 }
 
-func ConnectMySQL(user, password, host string, port int, dbname string) (*sql.DB, error) {
+func ConnectMySQL(cfg config.MySQLConfig) (*sql.DB, error) {
 	// DSN for MySQL
 	//format: user:password@tcp(host:port)/name
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", user, password, host, port, dbname)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
 
 	//open connection
 	db, err := sql.Open("mysql", dsn)
