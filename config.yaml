@@ -8,8 +8,8 @@ mysql:
 postgresql:
   host: "localhost"
   port: 5432
-  user: "root"
-  password: "root"
+  user: "postgres"
+  password: "Password"
   dbname: "migration_postgres"
 
 file_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
