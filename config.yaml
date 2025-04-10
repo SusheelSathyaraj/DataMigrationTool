@@ -1,8 +1,15 @@
-database:
+mysql:
   host: "localhost"
   port: 3306
   user: "user"
   password: "password"
   dbname: "migration_tool"
+
+postgresql:
+  host: "localhost"
+  port: 5432
+  user: "root"
+  password: "root"
+  dbname: "migration_postgres"
 
 file_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
