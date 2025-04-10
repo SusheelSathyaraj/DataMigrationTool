@@ -12,4 +12,4 @@ postgresql:
   password: "Password"
   dbname: "migration_postgres"
 
-file_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
+sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool"

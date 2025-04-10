@@ -27,7 +27,7 @@ type PostgreSQLConfig struct {
 type Config struct {
 	MySQL      MySQLConfig      `yaml:"mysql"`
 	PostgreSQL PostgreSQLConfig `yaml:"postgresql"`
-	FilePath   string           `yaml:"file_path"`
+	FilePath   string           `yaml:"sqlfile_path"`
 }
 
 func LoadConfig(filepath string) (*Config, error) {
