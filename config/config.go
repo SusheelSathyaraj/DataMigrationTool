@@ -25,9 +25,9 @@ type PostgreSQLConfig struct {
 
 // config struct to map config.yaml
 type Config struct {
-	MySQL      MySQLConfig      `yaml:"mysql"`
-	PostgreSQL PostgreSQLConfig `yaml:"postgresql"`
-	FilePath   string           `yaml:"sqlfile_path"`
+	MySQL       MySQLConfig      `yaml:"mysql"`
+	PostgreSQL  PostgreSQLConfig `yaml:"postgresql"`
+	SQLFilePath string           `yaml:"sqlfile_path"`
 }
 
 func LoadConfig(filepath string) (*Config, error) {

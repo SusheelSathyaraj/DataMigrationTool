@@ -92,7 +92,7 @@ func main() {
 
 	//checking the fetch functionality of the mysql database
 	fmt.Println("\n Fetching data from the mysql database...")
-	data, err := database.FetchData(db, cfg.FilePath)
+	data, err := database.FetchData(db, cfg.SQLFilePath)
 	if err != nil {
 		log.Fatalf("failed to fetch data %v", err)
 	}
