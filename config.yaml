@@ -5,4 +5,4 @@ database:
   password: "root"
   dbname: "classicmodels"
 
-file_path: "/home/susheel/learning/go/src/Work/datamigrationtool/mysqlsampledatabase.sql"
+sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool/mysqlsampledatabase.sql"

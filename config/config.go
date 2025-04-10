@@ -16,7 +16,7 @@ type Config struct {
 		Password string `yaml:"password"`
 		DBName   string `yaml:"dbname"`
 	} `yaml:"database"`
-	FilePath string `yaml:"file_path"`
+	FilePath string `yaml:"sqlfile_path"`
 }
 
 func LoadConfig(filepath string) (*Config, error) {
