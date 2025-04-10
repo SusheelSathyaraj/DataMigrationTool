@@ -32,11 +32,11 @@ func TestMain(m *testing.M) {
 
 func TestMySQLConnection(t *testing.T) {
 	//Get creds from the config file
-	dbuser := testConfig.Database.User
-	dbpass := testConfig.Database.Password
-	dbname := testConfig.Database.DBName
-	dbhost := testConfig.Database.Host
-	dbport := testConfig.Database.Port
+	dbuser := testConfig.MySQL.User
+	dbpass := testConfig.MySQL.Password
+	dbname := testConfig.MySQL.DBName
+	dbhost := testConfig.MySQL.Host
+	dbport := testConfig.MySQL.Port
 
 	//if any env variable is missing, skip test
 	if dbuser == "" || dbpass == "" || dbname == "" || dbhost == "" || dbport == 0 {

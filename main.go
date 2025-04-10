@@ -83,7 +83,7 @@ func main() {
 
 	//checking the connection to mysql database
 	fmt.Println("\n Attempting to connect to MySQL database...")
-	db, err := database.ConnectMySQL(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
+	db, err := database.ConnectMySQL(cfg.MySQL.User, cfg.MySQL.Password, cfg.MySQL.Host, cfg.MySQL.Port, cfg.MySQL.DBName)
 	if err != nil {
 		log.Fatalf("connection failed %v", err)
 	}
