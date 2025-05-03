@@ -140,7 +140,7 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 		valuesPtr := make([]interface{}, len(columns))
 
 		//setup pointers
-		for i := range values {
+		for i, _ := range values {
 			valuesPtr[i] = values[i]
 		}
 
@@ -217,6 +217,15 @@ func ConnectMySQL(user, password, host string, port int, dbname string) (*sql.DB
 	return client.DB, nil
 }
 
+func ConnectMySQLFromConfig(cfg *config.Config) (*sql.DB, error) {
+	client := NewMYSQLClientFromConfig(cfg)
+	if err := client.Connect(); err != nil {
+		return nil, fmt.Errorf("could not connect to the MySQL dtabase")
+	}
+	fmt.Println("Successfully connected to the MySQL Database")
+	return client.DB, nil
+}
+
 func ExtractTableNamesFromSQLFile(filepath string) ([]string, error) {
 	parser := &SQLParser{}
 	return parser.ParseSQLFiles(filepath)
@@ -238,5 +247,27 @@ func FetchData(db *sql.DB, sqlFilepath string) ([]map[string]interface{}, error)
 	}
 	//fetch data from all tables
 	return client.FetchAllData(tableNames)
+}
 
+func FetchDataFromConfig(cfg *config.Config) ([]map[string]interface{}, error) {
+	// Create client from config and connect
+	client := NewMYSQLClientFromConfig(cfg)
+	if err := client.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to MySQL: %w", err)
+	}
+	defer client.Close()
+
+	// Parse the SQL file from config
+	parser := &SQLParser{}
+	tableNames, err := parser.ParseSQLFiles(cfg.SQLFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract table names: %w", err)
+	}
+
+	if len(tableNames) == 0 {
+		return nil, fmt.Errorf("no tables found in the SQL file")
+	}
+
+	// Fetch data from all tables
+	return client.FetchAllData(tableNames)
 }
