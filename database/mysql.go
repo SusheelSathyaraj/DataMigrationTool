@@ -137,15 +137,16 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 	for rows.Next() {
 		//create a slice of interface to hold values
 		values := make([]interface{}, len(columns))
-		valuesPtr := make([]interface{}, len(columns))
+		//valuesPtr := make([]interface{}, len(columns))
 
 		//setup pointers
 		for i, _ := range values {
-			valuesPtr[i] = values[i]
+			//valuesPtr[i] = values[i]
+			values[i] = new(interface{})
 		}
 
 		//scan row into the pointers
-		if err := rows.Scan(valuesPtr...); err != nil {
+		if err := rows.Scan(values...); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
 		}
 
@@ -154,7 +155,8 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 
 		//convert any []byte to a string for storing
 		for i, colName := range columns {
-			val := values[i]
+			//Dereferencing the pointer to get actual value
+			val := *(values[i].(*interface{}))
 			if b, ok := val.([]byte); ok {
 				rowMap[colName] = string(b)
 			} else {
