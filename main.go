@@ -83,8 +83,6 @@ func main() {
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
 
-	//var db *sql.DB
-
 	//checking the connection to database
 	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
 
@@ -94,8 +92,7 @@ func main() {
 	case "mysql":
 		sourceClient = database.NewMYSQLClientFromConfig(cfg)
 	case "postgresql":
-		//TO DO: sourceClient = database.NewPostgreSQLFromConfig(cfg)
-		log.Fatal("PostgresQL not yet implemented")
+		sourceClient = database.NewPostgreSQLClientFromConfig(cfg)
 	default:
 		log.Fatalf("Unsupported source database type, %s", *sourceDB)
 	}
@@ -103,16 +100,8 @@ func main() {
 	if err := sourceClient.Connect(); err != nil {
 		log.Fatalf("Failed to connect to %s Database, %v", *sourceDB, err)
 	}
-
-	//Using type ascertion to get correct client type
-	mysqlClient, ok := sourceClient.(*database.MySQLClient)
-	if !ok {
-		log.Fatalf("Failed to cast source client to expected type")
-	}
-
-	defer mysqlClient.Close()
-
-	fmt.Printf("Successfully connected to %s database", *sourceDB)
+	defer sourceClient.Close()
+	fmt.Printf("successfully connected to the %s database", *sourceDB)
 
 	//Parsing SQL file
 	fmt.Println("Fetching data from source database...")
@@ -123,14 +112,14 @@ func main() {
 	}
 
 	if len(tables) == 0 {
-		log.Fatalf("No tables found in the SQL file")
+		log.Fatalf("no tables found in the SQL file,%v", err)
 	}
 
-	fmt.Printf("Found %d tables in %v ", len(tables), tables)
+	fmt.Printf("Found %d tables, %v", len(tables), tables)
 
 	// fetch functionality of the mysql database tables
 	fmt.Println("\n Fetching data from the source database...")
-	results, err := mysqlClient.FetchAllData(tables)
+	results, err := sourceClient.FetchAllData(tables)
 	if err != nil {
 		log.Fatalf("failed to fetch data %v", err)
 	}
@@ -139,16 +128,36 @@ func main() {
 	//Handling target database
 	if *targetDB != "" {
 		fmt.Printf("Preparing to migrate data to %s.. ", *targetDB)
+
+		var targetClient database.DatabaseClient
+
 		switch strings.ToLower(*targetDB) {
+		case "mysql":
+			targetClient = database.NewMYSQLClientFromConfig(cfg)
 		case "postgresql":
-			//TO DO import logic
-			fmt.Println("Postgres import not  yet implemented")
+			targetClient = database.NewPostgreSQLClientFromConfig(cfg)
 		case "mongodb":
 			//TO Do import logic
 			fmt.Println("MongoDb logic not yet implemented")
+			return
 		default:
 			log.Fatalf("unsupported database target type %s", *targetDB)
 		}
+
+		if err := targetClient.Connect(); err != nil {
+			log.Fatalf("failed to connect to the target %s database, %v", *targetDB, err)
+		}
+		defer targetClient.Close()
+
+		fmt.Println("Successfully connected to the target %s database", *targetDB)
+
+		//Import data to the target database
+		fmt.Println("Importing data to the target database")
+		err = targetClient.ImportData(results)
+		if err != nil {
+			log.Fatalf("failed to import data, %v", err)
+		}
+		fmt.Println("Data Migration completed successfully !!!")
 	}
 	fmt.Println("Migration Process completed!!")
 }
