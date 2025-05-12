@@ -18,6 +18,7 @@ type DatabaseClient interface {
 	Close() error
 	FetchAllData(tables []string) ([]map[string]interface{}, error)
 	ExecuteQuery(query string) (*sql.Rows, error)
+	ImportData(data []map[string]interface{}) error
 }
 
 type MySQLClient struct {
@@ -170,6 +171,92 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 		return nil, fmt.Errorf("error during the row iteration,%v", err)
 	}
 	return results, nil
+}
+
+func (c *MySQLClient) ImportData(data []map[string]interface{}) error {
+	if c.DB == nil {
+		return fmt.Errorf("database connection not established")
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("no data to import")
+	}
+
+	//Grouping data by table
+	tableData := make(map[string][]map[string]interface{}, 0)
+	for _, row := range data {
+		tableName, okay := row["_source_table"].(string)
+		if !okay {
+			return fmt.Errorf("row missing source table information")
+		}
+		tableData[tableName] = append(tableData[tableName], row)
+	}
+
+	//processing each table
+	for tableName, rows := range tableData {
+		if len(rows) == 0 {
+			continue
+		}
+		//get column names apart from _source_table
+		first_row := rows[0]
+		columns := make([]string, 0, len(first_row)-1)
+		for col := range first_row {
+			if col != "_source_table" {
+				columns = append(columns, col)
+			}
+		}
+
+		//Designing Transaction
+		tx, err := c.DB.Begin()
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction, %v", err)
+		}
+
+		//Creating table if not present
+		createTableSQL := generateCreateTableSQL(tableName, first_row)
+		_, err = tx.Exec(createTableSQL)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to create a table %s, %v", tableName, err)
+		}
+
+		//Preparing insert statement
+		placeholder := make([]string, len(columns))
+		for i := range placeholder {
+			placeholder[i] = "?"
+		}
+
+		insertSQL := fmt.Sprintf(
+			"INSERT INTO %s (%s) VALUES(%s)",
+			tableName,
+			strings.Join(columns, ", "),
+			strings.Join(placeholder, ", "),
+		)
+		stmt, err := tx.Prepare(insertSQL)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to prepare statement, %v", err)
+		}
+		defer stmt.Close()
+
+		//Inserting rows
+		for _, row := range rows {
+			values := make([]interface{}, len(columns))
+			for i, col := range columns {
+				values[i] = row[col]
+			}
+			_, err := stmt.Exec(values...)
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to insert row, %v", err)
+			}
+		}
+		//Commit transaction
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit transaction, %v", err)
+		}
+		fmt.Printf("Successfully imported %d rows into table %s", len(rows), tableName)
+	}
+	return nil
 }
 
 // SQLParser provides methods for parsingSQL files
