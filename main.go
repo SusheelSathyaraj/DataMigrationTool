@@ -149,7 +149,7 @@ func main() {
 		}
 		defer targetClient.Close()
 
-		fmt.Println("Successfully connected to the target %s database", *targetDB)
+		fmt.Printf("Successfully connected to the target %s database", *targetDB)
 
 		//Import data to the target database
 		fmt.Println("Importing data to the target database")
