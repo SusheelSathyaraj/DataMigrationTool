@@ -212,7 +212,7 @@ func (c *MySQLClient) ImportData(data []map[string]interface{}) error {
 		}
 
 		//Creating table if not present
-		createTableSQL := generateCreateTableSQL(tableName, first_row)
+		createTableSQL := generateMySQLCreateTableSQL(tableName, first_row)
 		_, err = tx.Exec(createTableSQL)
 		if err != nil {
 			tx.Rollback()
@@ -359,4 +359,34 @@ func FetchDataFromConfig(cfg *config.Config) ([]map[string]interface{}, error) {
 
 	// Fetch data from all tables
 	return client.FetchAllData(tableNames)
+}
+
+// Helper function  for MYSQL create table
+func generateMySQLCreateTableSQL(tableName string, sampleRow map[string]interface{}) string {
+	columns := make([]string, 0, len(sampleRow)-1)
+	for col, val := range sampleRow {
+		if col == "_source_table" {
+			continue
+		}
+		//Determining MySQL data type GO datatypes
+		var dataType string
+		switch val.(type) {
+		case int, int32, int64:
+			dataType = "INT"
+		case float32, float64:
+			dataType = "DECIMAL(10,2)"
+		case bool:
+			dataType = "BOOLEAN"
+		case string:
+			dataType = "TEXT"
+		case []byte:
+			dataType = "BLOB"
+		case nil:
+			dataType = "TEXT"
+		default:
+			dataType = "TEXT"
+		}
+		columns = append(columns, fmt.Sprintf("%s %s", col, dataType))
+	}
+	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", tableName, strings.Join(columns, ", "))
 }
