@@ -56,11 +56,6 @@ func isValidDatabase(db string, slice []string) bool {
 }
 
 func main() {
-	//Loading config from config.yaml
-	cfg, err := config.LoadConfig("config.yaml")
-	if err != nil {
-		log.Fatalf("Error loading config %v", err)
-	}
 
 	//defining CLI for user input
 	sourceDB := flag.String("source", "", "Source Database type(mysql,postgresql,mongodb)")
@@ -68,9 +63,16 @@ func main() {
 	mode := flag.String("mode", "full", "Migration mode(full,incremental,scheduled)")
 	//filetype := flag.String("filetype", "", "Format (csv,json,xml)")
 	//filetype to be added later
+	configPath := flag.String("config", "config.yaml", "Path to config file")
 
 	//parsing the user input
 	flag.Parse()
+
+	//Loading config from config.yaml
+	cfg, err := config.LoadConfig(*configPath)
+	if err != nil {
+		log.Fatalf("Error loading config %v", err)
+	}
 
 	//validate input
 	if err := validateInput(*sourceDB, *targetDB, *mode); err != nil {
@@ -81,21 +83,81 @@ func main() {
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
 
-	//checking the connection to mysql database
-	fmt.Println("\n Attempting to connect to MySQL database...")
-	db, err := database.ConnectMySQL(cfg.MySQL.User, cfg.MySQL.Password, cfg.MySQL.Host, cfg.MySQL.Port, cfg.MySQL.DBName)
-	if err != nil {
-		log.Fatalf("connection failed %v", err)
-	}
-	defer db.Close()
-	fmt.Println("Connection Successful")
+	//checking the connection to database
+	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
 
-	//checking the fetch functionality of the mysql database
-	fmt.Println("\n Fetching data from the mysql database...")
-	data, err := database.FetchData(db, cfg.FilePath)
+	var sourceClient database.DatabaseClient
+
+	switch strings.ToLower(*sourceDB) {
+	case "mysql":
+		sourceClient = database.NewMYSQLClientFromConfig(cfg)
+	case "postgresql":
+		sourceClient = database.NewPostgreSQLClientFromConfig(cfg)
+	default:
+		log.Fatalf("Unsupported source database type, %s", *sourceDB)
+	}
+
+	if err := sourceClient.Connect(); err != nil {
+		log.Fatalf("Failed to connect to %s Database, %v", *sourceDB, err)
+	}
+	defer sourceClient.Close()
+	fmt.Printf("successfully connected to the %s database", *sourceDB)
+
+	//Parsing SQL file
+	fmt.Println("Fetching data from source database...")
+	parser := &database.SQLParser{}
+	tables, err := parser.ParseSQLFiles(cfg.SQLFilePath)
+	if err != nil {
+		log.Fatalf("could not parse the SQL file, %v", err)
+	}
+
+	if len(tables) == 0 {
+		log.Fatalf("no tables found in the SQL file,%v", err)
+	}
+
+	fmt.Printf("Found %d tables, %v", len(tables), tables)
+
+	// fetch functionality of the mysql database tables
+	fmt.Println("\n Fetching data from the source database...")
+	results, err := sourceClient.FetchAllData(tables)
 	if err != nil {
 		log.Fatalf("failed to fetch data %v", err)
 	}
-	fmt.Printf("Fetched data is: %v", data)
+	fmt.Printf("Fetched %d rows of data:", len(results))
 
+	//Handling target database
+	if *targetDB != "" {
+		fmt.Printf("Preparing to migrate data to %s.. ", *targetDB)
+
+		var targetClient database.DatabaseClient
+
+		switch strings.ToLower(*targetDB) {
+		case "mysql":
+			targetClient = database.NewMYSQLClientFromConfig(cfg)
+		case "postgresql":
+			targetClient = database.NewPostgreSQLClientFromConfig(cfg)
+		case "mongodb":
+			//TO Do import logic
+			fmt.Println("MongoDb logic not yet implemented")
+			return
+		default:
+			log.Fatalf("unsupported database target type %s", *targetDB)
+		}
+
+		if err := targetClient.Connect(); err != nil {
+			log.Fatalf("failed to connect to the target %s database, %v", *targetDB, err)
+		}
+		defer targetClient.Close()
+
+		fmt.Printf("Successfully connected to the target %s database", *targetDB)
+
+		//Import data to the target database
+		fmt.Println("Importing data to the target database")
+		err = targetClient.ImportData(results)
+		if err != nil {
+			log.Fatalf("failed to import data, %v", err)
+		}
+		fmt.Println("Data Migration completed successfully !!!")
+	}
+	fmt.Println("Migration Process completed!!")
 }

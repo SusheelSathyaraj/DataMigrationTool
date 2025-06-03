@@ -71,7 +71,7 @@ func TestMySQLFetchData_Success(t *testing.T) {
 	defer db.Close()
 
 	//loading a dynamic table name from the filepath
-	tableNames, err := ExtractTableNamesFromSQLFile(testConfig.FilePath)
+	tableNames, err := ExtractTableNamesFromSQLFile(testConfig.SQLFilePath)
 	if err != nil {
 		t.Fatalf("Failed to extract the table names, %v", err)
 	}
@@ -90,7 +90,7 @@ func TestMySQLFetchData_Success(t *testing.T) {
 	mock.ExpectQuery(query).WillReturnRows(mockRows) //returns from all tables, generic query
 
 	//call fetchdata func
-	data, err := FetchData(db, testConfig.FilePath)
+	data, err := FetchData(db, testConfig.SQLFilePath)
 
 	//Assertions
 	if err != nil {
@@ -111,7 +111,7 @@ func TestMySQLFetchData_EmptyTable(t *testing.T) {
 	defer db.Close()
 
 	//dynamically extract table from the SQL file
-	tableNames, err := ExtractTableNamesFromSQLFile(testConfig.FilePath)
+	tableNames, err := ExtractTableNamesFromSQLFile(testConfig.SQLFilePath)
 	if err != nil {
 		t.Fatalf("Failed to extract the table name from the SQL file, %v", err)
 	}
@@ -128,7 +128,7 @@ func TestMySQLFetchData_EmptyTable(t *testing.T) {
 	query := fmt.Sprintf("(?i)^SELECT \\* FROM %s\\s*;?$", tableName)
 	mock.ExpectQuery(query).WillReturnRows(mockRows)
 
-	data, err := FetchData(db, testConfig.FilePath)
+	data, err := FetchData(db, testConfig.SQLFilePath)
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}
@@ -151,7 +151,7 @@ func TestMySQLFetchData_Error(t *testing.T) {
 	mock.ExpectQuery("?(i)^SELECT \\* FROM %s\\s*;?$").WillReturnError(errors.New("query failed!!"))
 
 	//calling fetchdata func
-	data, err := FetchData(db, testConfig.FilePath)
+	data, err := FetchData(db, testConfig.SQLFilePath)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
