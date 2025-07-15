@@ -141,7 +141,7 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 		//valuesPtr := make([]interface{}, len(columns))
 
 		//setup pointers
-		for i, _ := range values {
+		for i := range values {
 			//valuesPtr[i] = values[i]
 			values[i] = new(interface{})
 		}
