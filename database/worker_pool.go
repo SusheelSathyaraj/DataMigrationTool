@@ -44,22 +44,22 @@ func (wp *WorkerPool) Start() {
 }
 
 // processing jobs from the jobs channel
-func (wp *WorkerPool) work(id int) {
+func (wp *WorkerPool) worker(id int) {
 	defer wp.wg.Done()
 
 	for job := range wp.jobs {
 		fmt.Printf("Worker %d processing table: %s\n", id, job.TableName)
-	}
 
-	//fetching data from single table
-	data, err := wp.fetchTableData(job.Client, job.TableName)
+		//fetching data from single table
+		data, err := wp.fetchTableData(job.Client, job.TableName)
 
-	result := TableResult{
-		TableName: job.TableName,
-		Data:      data,
-		Error:     err,
+		result := TableResult{
+			TableName: job.TableName,
+			Data:      data,
+			Error:     err,
+		}
+		wp.results <- result
 	}
-	wp.results <- result
 }
 
 // fetching data from single table implementation
@@ -133,4 +133,35 @@ func ProcessTablesWithWorkerPool(client DatabaseClient, tables []string, numWork
 		return nil, fmt.Errorf("failed to process %d tables: %v", len(errors), errors[0])
 	}
 	return allResults, nil
+}
+
+// for batch processing of data
+type BatchProcessor struct {
+	batchSize int
+}
+
+// creating a new batch processor
+func NewBatchProcessor(batchsize int) *BatchProcessor {
+	return &BatchProcessor{batchSize: batchsize}
+}
+
+// processing data in batches
+func (bp *BatchProcessor) ProcessInBatches(data []map[string]interface{}, processFunc func([]map[string]interface{})) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	for i := 0; i < len(data); i += bp.batchSize {
+		end := i + bp.batchSize
+		if end > len(data) {
+			end = len(data)
+		}
+		batch := data[i:end]
+		if err := processFunc(batch); err != nil {
+			return fmt.Errorf("failed to process the batch %d-%d:%w", i, end, &err)
+		}
+
+		fmt.Printf("Processed batch %d-%d (%d rows)", i, end, len(batch))
+	}
+	return nil
 }
