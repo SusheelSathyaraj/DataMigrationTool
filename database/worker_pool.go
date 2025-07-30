@@ -84,3 +84,53 @@ func (wp *WorkerPool) Close() {
 func (wp *WorkerPool) GetResults() <-chan TableResult {
 	return wp.results
 }
+
+// proessing multiple tables concurrently
+func ProcessTablesWithWorkerPool(client DatabaseClient, tables []string, numWorkers int) ([]map[string]interface{}, error) {
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("no tables to process")
+	}
+
+	//creating worker pool
+	wp := NewWorkerPool(numWorkers)
+	wp.Start()
+
+	//submitting jobs to the pool
+	go func() {
+		for _, table := range tables {
+			job := TableJob{
+				TableName: table,
+				Client:    client,
+			}
+			wp.SubmitJob(job)
+		}
+		wp.Close()
+	}()
+
+	//collecting results
+	var allResults []map[string]interface{}
+	var errors []error
+
+	for i := 0; i < len(tables); i++ {
+		result := <-wp.GetResults()
+
+		if result.Error != nil {
+			errors = append(errors, fmt.Errorf("error processing table %s: %w", result.TableName, result.Error))
+			continue
+		}
+
+		//Adding table info to each row
+		for j := range result.Data {
+			result.Data[j]["_source_table"] = result.TableName
+		}
+
+		allResults = append(allResults, result.Data...)
+		fmt.Printf("Completed processing table %s:%d rows", result.TableName, len(result.Data))
+	}
+
+	//returing error if any table fails
+	if len(errors) > 0 {
+		return nil, fmt.Errorf("failed to process %d tables: %v", len(errors), errors[0])
+	}
+	return allResults, nil
+}
