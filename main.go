@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
@@ -64,6 +65,9 @@ func main() {
 	//filetype := flag.String("filetype", "", "Format (csv,json,xml)")
 	//filetype to be added later
 	configPath := flag.String("config", "config.yaml", "Path to config file")
+	workers := flag.Int("workers", runtime.NumCPU(), "Number of worker goroutines for concurrent processing")
+	batchsize := flag.Int("batch-size", 1000, "Batch size for data processing")
+	concurrent := flag.Bool("concurrent", true, "Enable concurrent processing")
 
 	//parsing the user input
 	flag.Parse()
@@ -104,7 +108,7 @@ func main() {
 	fmt.Printf("successfully connected to the %s database", *sourceDB)
 
 	//Parsing SQL file
-	fmt.Println("Fetching data from source database...")
+	fmt.Println("Parsing SQL file for table names...")
 	parser := &database.SQLParser{}
 	tables, err := parser.ParseSQLFiles(cfg.SQLFilePath)
 	if err != nil {
@@ -117,9 +121,18 @@ func main() {
 
 	fmt.Printf("Found %d tables, %v", len(tables), tables)
 
-	// fetch functionality of the mysql database tables
+	// fetch functionality of the source database tables
 	fmt.Println("\n Fetching data from the source database...")
-	results, err := sourceClient.FetchAllData(tables)
+	var results []map[string]interface{}
+
+	if *concurrent && len(tables) > 1 {
+		fmt.Printf("Using Concurrent processing with %d workers ...\n", *workers)
+		results, err = sourceClient.FetchAllDataConcurrently(tables, *workers)
+	} else {
+		fmt.Printf("Using sequential processing...\n")
+		results, err = sourceClient.FetchAllData(tables)
+	}
+
 	if err != nil {
 		log.Fatalf("failed to fetch data %v", err)
 	}
@@ -151,9 +164,20 @@ func main() {
 
 		fmt.Printf("Successfully connected to the target %s database", *targetDB)
 
-		//Import data to the target database
-		fmt.Println("Importing data to the target database")
-		err = targetClient.ImportData(results)
+		fmt.Printf("Importing Data to target database")
+
+		if *concurrent && len(results) > *batchsize {
+			fmt.Printf("Using Concurrent batch processing with batch size %d...\n", *batchsize)
+			if err = targetClient.ImportDataConcurrently(results, *batchsize); err != nil {
+				log.Fatalf("Failed to import data concurrently: %v", err)
+			}
+		} else {
+			fmt.Println("Using sequential import...")
+			if err = targetClient.ImportData(results); err != nil {
+				log.Fatalf("Failed to import data: %v", err)
+			}
+		}
+
 		if err != nil {
 			log.Fatalf("failed to import data, %v", err)
 		}
