@@ -226,7 +226,7 @@ func (bp *BatchProcessor) ProcessInBatches(data []map[string]interface{}, proces
 		}
 		batch := data[i:end]
 		if err := processFunc(batch); err != nil {
-			return fmt.Errorf("failed to process the batch %d-%d:%w", i, end, &err)
+			return fmt.Errorf("failed to process the batch %d-%d:%v", i, end, &err)
 		}
 
 		fmt.Printf("Processed batch %d-%d (%d rows)", i, end, len(batch))
