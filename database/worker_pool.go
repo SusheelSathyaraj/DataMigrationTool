@@ -64,76 +64,8 @@ func (wp *WorkerPool) worker(id int) {
 
 // fetching data from single table implementation
 func (wp *WorkerPool) fetchTableData(client DatabaseClient, tableName string) ([]map[string]interface{}, error) {
-	//fetchdata method for a single table
-	if mysqlClient, ok := client.(*MySQLClient); ok {
-		return wp.fetchMySQLTableData(mysqlClient, tableName)
-	}
-	if postgresClient, ok := client.(*PostgreSQLClient); ok {
-		return wp.fetchPostgresTableData(postgresClient, tableName)
-	}
-	//fallback existing method
+	//using fetchAllData method for a single table
 	return client.FetchAllData([]string{tableName})
-}
-
-// fetching data from the mysql table
-func (wp *WorkerPool) fetchMySQLTableData(client *MySQLClient, tableName string) ([]map[string]interface{}, error) {
-	if client.DB == nil {
-		return nil, fmt.Errorf("db connection cannot be etablished")
-	}
-
-	sanitizedTableName := sanitizeIdentifier(tableName)
-	query := fmt.Sprintf("SELECT * FROM %s", sanitizedTableName)
-
-	return client.fetchDataFromTable(query)
-}
-
-// fetching data from the Postgresql table
-func (wp *WorkerPool) fetchPostgresTableData(client *PostgreSQLClient, tableName string) ([]map[string]interface{}, error) {
-	if client.DB == nil {
-		return nil, fmt.Errorf("db connection cannot be established")
-	}
-
-	sanitizedTableName := sanitizeIdentifier(tableName)
-	query := fmt.Sprintf("SELECT * FROM %s", sanitizedTableName)
-
-	rows, err := client.DB.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query on table %s:%w", tableName, err)
-	}
-	defer rows.Close()
-
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get column names for table, %s:%w", tableName, err)
-	}
-
-	var results []map[string]interface{}
-	for rows.Next() {
-		value := make([]interface{}, len(columns))
-		valuePtr := make([]interface{}, len(columns))
-
-		for i := range value {
-			valuePtr[i] = &value[i]
-		}
-		if err := rows.Scan(valuePtr...); err != nil {
-			return nil, fmt.Errorf("failed to scan the row: %w", err)
-		}
-
-		rowMap := make(map[string]interface{})
-		for i, colName := range columns {
-			val := value[i]
-			if b, okay := val.([]byte); okay {
-				rowMap[colName] = string(b)
-			} else {
-				rowMap[colName] = val
-			}
-		}
-		results = append(results, rowMap)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error during row iteration: %w", err)
-	}
-	return results, nil
 }
 
 // adding a job to the workerpool
