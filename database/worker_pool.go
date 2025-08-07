@@ -214,7 +214,7 @@ func NewBatchProcessor(batchsize int) *BatchProcessor {
 }
 
 // processing data in batches
-func (bp *BatchProcessor) ProcessInBatches(data []map[string]interface{}, processFunc func([]map[string]interface{})) error {
+func (bp *BatchProcessor) ProcessInBatches(data []map[string]interface{}, processFunc func([]map[string]interface{}) error) error {
 	if len(data) == 0 {
 		return nil
 	}
