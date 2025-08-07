@@ -12,15 +12,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// Interface for ease with mock tests
-type DatabaseClient interface {
-	Connect() error
-	Close() error
-	FetchAllData(tables []string) ([]map[string]interface{}, error)
-	ExecuteQuery(query string) (*sql.Rows, error)
-	ImportData(data []map[string]interface{}) error
-}
-
 type MySQLClient struct {
 	User     string
 	Password string
@@ -275,10 +266,7 @@ func (c *MySQLClient) ImportDataConcurrently(data []map[string]interface{}, batc
 
 	processor := NewBatchProcessor(batchsize)
 
-	importFunc := func(batch []map[string]interface{}) error {
-		return c.ImportData(batch)
-	}
-	return processor.ProcessInBatches(data, importFunc)
+	return processor.ProcessInBatches(data, c.ImportData)
 }
 
 // SQLParser provides methods for parsingSQL files
