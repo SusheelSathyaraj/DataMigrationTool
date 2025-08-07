@@ -135,6 +135,14 @@ func (p *PostgreSQLClient) FetchAllData(tables []string) ([]map[string]interface
 	return allResults, nil
 }
 
+// fecthes data from mulitple tables using workerpool
+func (p *PostgreSQLClient) FetchAllDataConcurrently(tables []string, numWorkers int) ([]map[string]interface{}, error) {
+	if numWorkers <= 0 {
+		numWorkers = 4 //Default number of workers
+	}
+	return ProcessTablesWithWorkerPool(p, tables, numWorkers)
+}
+
 func (p *PostgreSQLClient) ImportData(data []map[string]interface{}) error {
 	if p.DB == nil {
 		return fmt.Errorf("database connection not established")
@@ -218,6 +226,16 @@ func (p *PostgreSQLClient) ImportData(data []map[string]interface{}) error {
 		fmt.Printf("Successfully imported %d rows into table %s \n", len(rows), tableName)
 	}
 	return nil
+}
+
+// imports data uing batch processing
+func (p *PostgreSQLClient) ImportDataConcurrently(data []map[string]interface{}, batchsize int) error {
+	if batchsize <= 0 {
+		batchsize = 1000 //default size of the batch
+	}
+	processor := NewBatchProcessor(batchsize)
+
+	return processor.ProcessInBatches(data, p.ImportData)
 }
 
 // Helper function

@@ -12,15 +12,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// Interface for ease with mock tests
-type DatabaseClient interface {
-	Connect() error
-	Close() error
-	FetchAllData(tables []string) ([]map[string]interface{}, error)
-	ExecuteQuery(query string) (*sql.Rows, error)
-	ImportData(data []map[string]interface{}) error
-}
-
 type MySQLClient struct {
 	User     string
 	Password string
@@ -173,6 +164,14 @@ func (c *MySQLClient) fetchDataFromTable(query string) ([]map[string]interface{}
 	return results, nil
 }
 
+// fetching data from multiple tablesusing worker pools
+func (c *MySQLClient) FetchAllDataConcurrently(tables []string, numWorkers int) ([]map[string]interface{}, error) {
+	if numWorkers <= 0 {
+		numWorkers = 4 //default number of workers
+	}
+	return ProcessTablesWithWorkerPool(c, tables, numWorkers)
+}
+
 func (c *MySQLClient) ImportData(data []map[string]interface{}) error {
 	if c.DB == nil {
 		return fmt.Errorf("database connection not established")
@@ -257,6 +256,17 @@ func (c *MySQLClient) ImportData(data []map[string]interface{}) error {
 		fmt.Printf("Successfully imported %d rows into table %s", len(rows), tableName)
 	}
 	return nil
+}
+
+// importing data concurrently
+func (c *MySQLClient) ImportDataConcurrently(data []map[string]interface{}, batchsize int) error {
+	if batchsize <= 0 {
+		batchsize = 1000 //default batch size
+	}
+
+	processor := NewBatchProcessor(batchsize)
+
+	return processor.ProcessInBatches(data, c.ImportData)
 }
 
 // SQLParser provides methods for parsingSQL files
@@ -390,3 +400,5 @@ func generateMySQLCreateTableSQL(tableName string, sampleRow map[string]interfac
 	}
 	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", tableName, strings.Join(columns, ", "))
 }
+
+//
