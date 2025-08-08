@@ -112,3 +112,24 @@ func NewMySQLConnectionPool(user, password, host string, port int, dbname string
 	}
 	return NewConnectionPool(maxSize, factory)
 }
+
+//creates postgresql connection pool
+
+func NewPostGresConnectionPool(user, password, host string, port int, dbname string, maxSize int) *ConnectionPool {
+	factory := func() (*sql.DB, error) {
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+		db, err := sql.Open("postgres", dsn)
+
+		if err != nil {
+			return nil, err
+		}
+
+		//configuring connection settings
+		db.SetMaxOpenConns(maxSize)
+		db.SetMaxIdleConns(maxSize / 2)
+		db.SetConnMaxLifetime(time.Hour)
+
+		return db, db.Ping()
+	}
+	return NewConnectionPool(maxSize, factory)
+}
