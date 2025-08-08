@@ -3,9 +3,11 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type MongoDBClient struct {
@@ -41,4 +43,31 @@ func NewMongoDBClientFromConfig(cfg *config.Config) *MongoDBClient {
 		DBName: cfg.MongoDB.DBName,
 		ctx:    context.Background(),
 	}
+}
+
+// connecting to mongoDB
+func (m *MongoDBClient) Connect() error {
+	//setting client options
+	clientOptions := options.Client().ApplyURI(m.URI)
+
+	//setting timeout for connection
+	ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+
+	//connecting to mongodb
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		return fmt.Errorf("failed to connect to mongodb: %v", err)
+	}
+
+	//checking connection
+	if err := client.Ping(ctx, nil); err != nil {
+		return fmt.Errorf("failed to ping MongoDB: %v", err)
+	}
+
+	m.Client = client
+	m.Database = client.Database(m.DBName)
+
+	fmt.Println("Successfully connected to mongoDB")
+	return nil
 }
