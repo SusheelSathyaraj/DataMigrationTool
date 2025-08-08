@@ -71,3 +71,20 @@ func (m *MongoDBClient) Connect() error {
 	fmt.Println("Successfully connected to mongoDB")
 	return nil
 }
+
+// backward compatiblty functions
+func ConnectMongoDB(uri, dbname string) (*MongoDBClient, error) {
+	client := NewMongoDBClient(uri, dbname)
+	if err := client.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to the mongodb:%v", err)
+	}
+	return client, nil
+}
+
+func ConnectMongoDBFromConfig(cfg *config.Config) (*MongoDBClient, error) {
+	client := NewMongoDBClientFromConfig(cfg)
+	if err := client.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to the mongodb:%v", err)
+	}
+	return client, nil
+}
