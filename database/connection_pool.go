@@ -94,6 +94,14 @@ func (p *ConnectionPool) createConnection() (*sql.DB, error) {
 	return conn, nil
 }
 
+// returning pool statistics
+func (p *ConnectionPool) Stat() (int, int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.currentSize, len(p.connections)
+}
+
 // creating a mysql connection pool
 func NewMySQLConnectionPool(user, password, host string, port int, dbname string, maxSize int) *ConnectionPool {
 	factory := func() (*sql.DB, error) {
