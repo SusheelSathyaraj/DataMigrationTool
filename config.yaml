@@ -12,8 +12,13 @@ postgresql:
   password: "Password"
   dbname: "migration_postgres"
 
-<<<<<<< HEAD
-sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool"
-=======
+mongodb:
+  host: "localhost"
+  port: 27017
+  user: "admin"
+  password: "password"
+  dbname: "migration_mongodb"
+  #if uri is provided, it will override individual settings
+  #uri: "mongodb://admin:password@localhost:27017/migration_mongodb"
+
 sqlfile_path: "/home/susheel/learning/go/src/Work/datamigrationtool/mysqlsampledatabase.sql"
->>>>>>> migration
