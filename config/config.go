@@ -23,10 +23,20 @@ type PostgreSQLConfig struct {
 	DBName   string `yaml:"dbname"`
 }
 
+type MongoDBConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+	URI      string `yaml:"uri"` //incase of direct URI connection string
+}
+
 // config struct to map config.yaml
 type Config struct {
 	MySQL       MySQLConfig      `yaml:"mysql"`
 	PostgreSQL  PostgreSQLConfig `yaml:"postgresql"`
+	MongoDB     MongoDBConfig    `yaml:"mongodb"`
 	SQLFilePath string           `yaml:"sqlfile_path"`
 }
 
