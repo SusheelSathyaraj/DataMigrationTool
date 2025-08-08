@@ -93,3 +93,22 @@ func (p *ConnectionPool) createConnection() (*sql.DB, error) {
 	p.currentSize++
 	return conn, nil
 }
+
+// creating a mysql connection pool
+func NewMySQLConnectionPool(user, password, host string, port int, dbname string, maxSize int) *ConnectionPool {
+	factory := func() (*sql.DB, error) {
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", user, password, host, port, dbname)
+		db, err := sql.Open("mysql", dsn)
+		if err != nil {
+			return nil, err
+		}
+
+		//configuring connection settings
+		db.SetMaxOpenConns(maxSize)
+		db.SetMaxIdleConns(maxSize / 2)
+		db.SetConnMaxLifetime(time.Hour)
+
+		return db, db.Ping()
+	}
+	return NewConnectionPool(maxSize, factory)
+}
