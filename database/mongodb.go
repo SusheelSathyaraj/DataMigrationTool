@@ -72,6 +72,16 @@ func (m *MongoDBClient) Connect() error {
 	return nil
 }
 
+// closing the mongodb connection
+func (m *MongoDBClient) Close() error {
+	if m.Client != nil {
+		ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+		defer cancel()
+		return m.Client.Disconnect(ctx)
+	}
+	return nil
+}
+
 // backward compatiblty functions
 func ConnectMongoDB(uri, dbname string) (*MongoDBClient, error) {
 	client := NewMongoDBClient(uri, dbname)
