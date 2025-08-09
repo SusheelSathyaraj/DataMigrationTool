@@ -2,10 +2,12 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -80,6 +82,53 @@ func (m *MongoDBClient) Close() error {
 		return m.Client.Disconnect(ctx)
 	}
 	return nil
+}
+
+// Executing the query, MongoDB uses aggregation pipeline
+func (m *MongoDBClient) ExecuteQuery(query string) (*sql.Rows, error) {
+	//MongoDb does not use SQL, this is just a plcaeholder for interface compliance
+	//In practise, convert the SQL to MongoDB aggregation pipeline
+	return nil, fmt.Errorf("ExecuteQuery is not implemented for MongoDb, use MongoDB- specific methods")
+}
+
+// fetching data from all specified collections
+func (m *MongoDBClient) FetchAllData(collectons []string) ([]map[string]interface{}, error) {
+	if m.Database == nil {
+		return nil, fmt.Errorf("database connection cannot be established")
+	}
+
+	var allResults []map[string]interface{}
+
+	for _, collectionName := range collectons {
+		collection := m.Database.Collection(collectionName)
+
+		//creating context with timeout
+		ctx, cancel := context.WithTimeout(m.ctx, 30*time.Second)
+
+		//finding all documents
+		cursor, err := collection.Find(ctx, bson.M{})
+		if err != nil {
+			return nil, fmt.Errorf("error fetching data from collection %s,%v", collectionName, err)
+		}
+
+		//Decoding all documents
+		var collectionResult []map[string]interface{}
+		if err := cursor.All(ctx, &collectionResult); err != nil {
+			return nil, fmt.Errorf("error decoding data from collection %s, %v", collectionName, err)
+		}
+
+		cursor.Close(ctx)
+		cancel()
+
+		//Adding collection info into each document
+		for i := range collectionResult {
+			collectionResult[i]["_source_table"] = collectionName
+		}
+
+		allResults = append(allResults, collectionResult...)
+		fmt.Printf("Fetched %d documents from collection %s", len(collectionResult), collectionName)
+	}
+	return allResults, nil
 }
 
 // backward compatiblty functions
