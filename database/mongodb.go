@@ -108,12 +108,15 @@ func (m *MongoDBClient) FetchAllData(collectons []string) ([]map[string]interfac
 		//finding all documents
 		cursor, err := collection.Find(ctx, bson.M{})
 		if err != nil {
+			cancel()
 			return nil, fmt.Errorf("error fetching data from collection %s,%v", collectionName, err)
 		}
 
 		//Decoding all documents
 		var collectionResult []map[string]interface{}
 		if err := cursor.All(ctx, &collectionResult); err != nil {
+			cursor.Close(ctx)
+			cancel()
 			return nil, fmt.Errorf("error decoding data from collection %s, %v", collectionName, err)
 		}
 
