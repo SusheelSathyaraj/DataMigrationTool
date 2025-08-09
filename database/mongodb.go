@@ -92,14 +92,14 @@ func (m *MongoDBClient) ExecuteQuery(query string) (*sql.Rows, error) {
 }
 
 // fetching data from all specified collections
-func (m *MongoDBClient) FetchAllData(collectons []string) ([]map[string]interface{}, error) {
+func (m *MongoDBClient) FetchAllData(collections []string) ([]map[string]interface{}, error) {
 	if m.Database == nil {
 		return nil, fmt.Errorf("database connection cannot be established")
 	}
 
 	var allResults []map[string]interface{}
 
-	for _, collectionName := range collectons {
+	for _, collectionName := range collections {
 		collection := m.Database.Collection(collectionName)
 
 		//creating context with timeout
@@ -132,6 +132,74 @@ func (m *MongoDBClient) FetchAllData(collectons []string) ([]map[string]interfac
 		fmt.Printf("Fetched %d documents from collection %s", len(collectionResult), collectionName)
 	}
 	return allResults, nil
+}
+
+// importing data into the mongodb collections
+func (m *MongoDBClient) ImportData(data []map[string]interface{}) error {
+	if m.Database == nil {
+		return fmt.Errorf("database connection cannot be establshed")
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("no data to import")
+	}
+
+	//grouping data by collection
+	collectionData := make(map[string][]interface{})
+	for _, row := range data {
+		collectionName, ok := row["_source_table"].(string)
+		if !ok {
+			return fmt.Errorf("row missing source table info")
+		}
+
+		//removing _source_table field before inserting
+		document := make(map[string]interface{})
+		for key, value := range row {
+			if key != "_source_table" {
+				document[key] = value
+			}
+		}
+		collectionData[collectionName] = append(collectionData[collectionName], document)
+	}
+	//inserting data into  each collection
+	for collectionName, documents := range collectionData {
+		if len(documents) == 0 {
+			continue
+		}
+		collection := m.Database.Collection(collectionName)
+
+		//creating context with timeout
+		ctx, cancel := context.WithTimeout(m.ctx, 60*time.Second)
+
+		//inserting many documents
+		result, err := collection.InsertMany(ctx, documents)
+		if err != nil {
+			cancel()
+			return fmt.Errorf("failed to insert data into the collection %s:%v", collectionName, err)
+		}
+
+		cancel()
+		fmt.Printf("Successfully imported %d documents into collection %s", len(result.InsertedIDs), collectionName)
+	}
+	return nil
+}
+
+// fetching data concurrently frmo multiple collections using workerpool
+func (m *MongoDBClient) FetchAllDataConcurrently(collections []string, numWorkers int) ([]map[string]interface{}, error) {
+	if numWorkers <= 0 {
+		numWorkers = 4 //Default number of workers
+	}
+	//using workerpool functionality
+	return ProcessTablesWithWorkerPool(m, collections, numWorkers)
+}
+
+// importing data concurrently usig batch processing
+func (m *MongoDBClient) ImportDataConcurrently(data []map[string]interface{}, batchSize int) error {
+	if batchSize <= 0 {
+		batchSize = 1000 //Default  batchsize
+	}
+	processor := NewBatchProcessor(batchSize)
+
+	return processor.ProcessInBatches(data, m.ImportData)
 }
 
 // backward compatiblty functions
