@@ -97,6 +97,8 @@ func main() {
 		sourceClient = database.NewMYSQLClientFromConfig(cfg)
 	case "postgresql":
 		sourceClient = database.NewPostgreSQLClientFromConfig(cfg)
+	case "mongodb":
+		sourceClient = database.NewMongoDBClientFromConfig(cfg)
 	default:
 		log.Fatalf("Unsupported source database type, %s", *sourceDB)
 	}
@@ -150,9 +152,7 @@ func main() {
 		case "postgresql":
 			targetClient = database.NewPostgreSQLClientFromConfig(cfg)
 		case "mongodb":
-			//TO Do import logic
-			fmt.Println("MongoDb logic not yet implemented")
-			return
+			targetClient = database.NewMongoDBClientFromConfig(cfg)
 		default:
 			log.Fatalf("unsupported database target type %s", *targetDB)
 		}
