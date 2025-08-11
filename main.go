@@ -87,6 +87,10 @@ func main() {
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
 
+	if *concurrent {
+		fmt.Printf("Using concurrent processing with %d workers and batchsize %d", *workers, *batchsize)
+	}
+
 	//checking the connection to database
 	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
 
@@ -97,6 +101,8 @@ func main() {
 		sourceClient = database.NewMYSQLClientFromConfig(cfg)
 	case "postgresql":
 		sourceClient = database.NewPostgreSQLClientFromConfig(cfg)
+	case "mongodb":
+		sourceClient = database.NewMongoDBClientFromConfig(cfg)
 	default:
 		log.Fatalf("Unsupported source database type, %s", *sourceDB)
 	}
@@ -107,19 +113,22 @@ func main() {
 	defer sourceClient.Close()
 	fmt.Printf("successfully connected to the %s database", *sourceDB)
 
-	//Parsing SQL file
-	fmt.Println("Parsing SQL file for table names...")
-	parser := &database.SQLParser{}
-	tables, err := parser.ParseSQLFiles(cfg.SQLFilePath)
+	//Parsing SQL file or discovering collections for mongodb
+	fmt.Println("Discovering tables and collections...")
+	tables, err := getTablesOrCollections(*sourceDB, cfg, sourceClient)
 	if err != nil {
-		log.Fatalf("could not parse the SQL file, %v", err)
+		log.Fatalf("could not discover tables or collections, %v", err)
 	}
 
 	if len(tables) == 0 {
-		log.Fatalf("no tables found in the SQL file,%v", err)
+		log.Fatalf("no tables or collections found in the file,%v", err)
 	}
 
-	fmt.Printf("Found %d tables, %v", len(tables), tables)
+	if strings.ToLower(*sourceDB) == "mongodb" {
+		fmt.Printf("Found %d collections : %v", len(tables), tables)
+	} else {
+		fmt.Printf("Found %d tables:: %v", len(tables), tables)
+	}
 
 	// fetch functionality of the source database tables
 	fmt.Println("\n Fetching data from the source database...")
@@ -150,9 +159,7 @@ func main() {
 		case "postgresql":
 			targetClient = database.NewPostgreSQLClientFromConfig(cfg)
 		case "mongodb":
-			//TO Do import logic
-			fmt.Println("MongoDb logic not yet implemented")
-			return
+			targetClient = database.NewMongoDBClientFromConfig(cfg)
 		default:
 			log.Fatalf("unsupported database target type %s", *targetDB)
 		}
@@ -184,4 +191,22 @@ func main() {
 		fmt.Println("Data Migration completed successfully !!!")
 	}
 	fmt.Println("Migration Process completed!!")
+}
+
+// helper function for handling mongodb parsing logic
+func getTablesOrCollections(sourceDB string, cfg *config.Config, sourceClient database.DatabaseClient) ([]string, error) {
+	switch strings.ToLower(sourceDB) {
+	case "mongodb":
+		//for mongodb, discover collections from database
+		if mongoClient, ok := sourceClient.(*database.MongoDBClient); ok {
+			return mongoClient.GetCollectionNames()
+		}
+		return nil, fmt.Errorf("failed to cast to MongoDB client")
+	case "mysql", "postgresql":
+		//for sql databases, parse SQL files
+		parser := &database.SQLParser{}
+		return parser.ParseSQLFiles(cfg.SQLFilePath)
+	default:
+		return nil, fmt.Errorf("unsupported database type %s", sourceDB)
+	}
 }
