@@ -87,6 +87,10 @@ func main() {
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
 
+	if *concurrent {
+		fmt.Printf("Using concurrent processing with %d workers and batchsize %d", *workers, *batchsize)
+	}
+
 	//checking the connection to database
 	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
 
@@ -109,19 +113,22 @@ func main() {
 	defer sourceClient.Close()
 	fmt.Printf("successfully connected to the %s database", *sourceDB)
 
-	//Parsing SQL file
-	fmt.Println("Parsing SQL file for table names...")
-	parser := &database.SQLParser{}
-	tables, err := parser.ParseSQLFiles(cfg.SQLFilePath)
+	//Parsing SQL file or discovering collections for mongodb
+	fmt.Println("Discovering tables and collections...")
+	tables, err := getTablesOrCollections(*sourceDB, cfg, sourceClient)
 	if err != nil {
-		log.Fatalf("could not parse the SQL file, %v", err)
+		log.Fatalf("could not discover tables or collections, %v", err)
 	}
 
 	if len(tables) == 0 {
-		log.Fatalf("no tables found in the SQL file,%v", err)
+		log.Fatalf("no tables or collections found in the file,%v", err)
 	}
 
-	fmt.Printf("Found %d tables, %v", len(tables), tables)
+	if strings.ToLower(*sourceDB) == "mongodb" {
+		fmt.Printf("Found %d collections : %v", len(tables), tables)
+	} else {
+		fmt.Printf("Found %d tables:: %v", len(tables), tables)
+	}
 
 	// fetch functionality of the source database tables
 	fmt.Println("\n Fetching data from the source database...")
