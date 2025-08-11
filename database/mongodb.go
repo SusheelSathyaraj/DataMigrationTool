@@ -202,6 +202,93 @@ func (m *MongoDBClient) ImportDataConcurrently(data []map[string]interface{}, ba
 	return processor.ProcessInBatches(data, m.ImportData)
 }
 
+//Helper functions
+
+// retrieving all collection names from the DB
+func (m *MongoDBClient) GetCollectionNames() ([]string, error) {
+	if m.Database == nil {
+		return nil, fmt.Errorf("database connection not established")
+	}
+	ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+
+	return m.Database.ListCollectionNames(ctx, bson.M{})
+}
+
+// creating an index on a collection
+func (m *MongoDBClient) CreateIndex(collectionName string, keys map[string]int) error {
+	if m.Database == nil {
+		return fmt.Errorf("database connection not established")
+	}
+	collection := m.Database.Collection(collectionName)
+
+	//converting keys to bson document
+	indexKeys := bson.M{}
+	for key, order := range keys {
+		indexKeys[key] = order
+	}
+
+	indexModel := mongo.IndexModel{
+		Keys: indexKeys,
+	}
+
+	ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+
+	_, err := collection.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
+		return fmt.Errorf("failed to create index on collection %s:%v", collectionName, err)
+	}
+
+	fmt.Printf("Created index on collection %s with keys %v", collectionName, keys)
+	return nil
+}
+
+// to counting documents in a collection
+func (m *MongoDBClient) CountDocuments(collectionName string, filter map[string]interface{}) (int64, error) {
+	if m.Database == nil {
+		return 0, fmt.Errorf("database connection not established")
+	}
+	collection := m.Database.Collection(collectionName)
+
+	//converting filter to bson
+	bsonFilter := bson.M{}
+	for key, value := range filter {
+		bsonFilter[key] = value
+	}
+
+	ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bsonFilter)
+}
+
+// MongoDB data type conversion helpers
+func convertToMongoType(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	//handling different go types and converting compatible mongodb types
+	switch v := value.(type) {
+	case string:
+		return v
+	case int, int32, int64:
+		return v
+	case float32, float64:
+		return v
+	case bool:
+		return v
+	case []byte:
+		return string(v)
+	case time.Time:
+		return v
+	default:
+		//for complex types coverting to string
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 // backward compatiblty functions
 func ConnectMongoDB(uri, dbname string) (*MongoDBClient, error) {
 	client := NewMongoDBClient(uri, dbname)
