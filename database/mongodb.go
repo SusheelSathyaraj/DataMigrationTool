@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
@@ -295,6 +296,7 @@ func ConnectMongoDB(uri, dbname string) (*MongoDBClient, error) {
 	if err := client.Connect(); err != nil {
 		return nil, fmt.Errorf("failed to connect to the mongodb:%v", err)
 	}
+
 	return client, nil
 }
 
@@ -304,4 +306,33 @@ func ConnectMongoDBFromConfig(cfg *config.Config) (*MongoDBClient, error) {
 		return nil, fmt.Errorf("failed to connect to the mongodb:%v", err)
 	}
 	return client, nil
+}
+
+// handling mongodb collection discovery
+type MongoCollectionParser struct{}
+
+// discovering collections directly from MongoDB
+func (p *MongoCollectionParser) ParseCollectionsFromDatabase(client *MongoDBClient) ([]string, error) {
+	return client.GetCollectionNames()
+}
+
+// converting SQL table names to MongoDB collections
+// for migrating from sql to mongodb
+func (p *MongoCollectionParser) ParseCollectionsFromSQL(sqlFilePath string) ([]string, error) {
+	//reusing the existing sql parser and treating tables as collections
+	sqlParser := &SQLParser{}
+	tableNames, err := sqlParser.ParseSQLFiles(sqlFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL file for collection names: %v", err)
+	}
+
+	//converting table names to collection names
+	collections := make([]string, len(tableNames))
+	for i, tableName := range tableNames {
+		// Convert to MongoDB collection naming convention (optional)
+		// e.g., "user_profiles" stays "user_profiles" or becomes "userProfiles"
+		collections[i] = strings.ToLower(tableName)
+	}
+	return collections, nil
+
 }
