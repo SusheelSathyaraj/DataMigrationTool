@@ -185,3 +185,21 @@ func main() {
 	}
 	fmt.Println("Migration Process completed!!")
 }
+
+// helper function for handling mongodb parsing logic
+func getTablesOrCollections(sourceDB string, cfg *config.Config, sourceClient database.DatabaseClient) ([]string, error) {
+	switch strings.ToLower(sourceDB) {
+	case "mongodb":
+		//for mongodb, discover collections from database
+		if mongoClient, ok := sourceClient.(*database.MongoDBClient); ok {
+			return mongoClient.GetCollectionNames()
+		}
+		return nil, fmt.Errorf("failed to cast to MongoDB client")
+	case "mysql", "postgresql":
+		//for sql databases, parse SQL files
+		parser := &database.SQLParser{}
+		return parser.ParseSQLFiles(cfg.SQLFilePath)
+	default:
+		return nil, fmt.Errorf("unsupported database type %s", sourceDB)
+	}
+}
