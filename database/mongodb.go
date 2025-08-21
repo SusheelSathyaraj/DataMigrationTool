@@ -334,5 +334,4 @@ func (p *MongoCollectionParser) ParseCollectionsFromSQL(sqlFilePath string) ([]s
 		collections[i] = strings.ToLower(tableName)
 	}
 	return collections, nil
-
 }
