@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/database"
@@ -255,4 +256,35 @@ func (s ValidationSummary) Print(phase string) {
 		}
 	}
 	fmt.Println("--------------")
+}
+
+// cheking if data types are compatible between source and target
+func (m *MigrationVaildator) ValidateDataTypes(sourceData []map[string]interface{}) error {
+	if len(sourceData) == 0 {
+		return nil
+	}
+
+	//first check row for data type compatibility
+	firstRow := sourceData[0]
+
+	for column, value := range firstRow {
+		if column == "_source_table" {
+			continue
+		}
+
+		valueType := reflect.TypeOf(value)
+
+		//logging type conversion issues
+		if valueType != nil {
+			switch valueType.Kind() {
+			case reflect.Map, reflect.Slice:
+				log.Printf("Warning: Complex type detected in column %s, will need handling", column)
+			case reflect.Float64:
+				if val, ok := value.(float64); ok && val != val { //checking for NaN
+					return fmt.Errorf("NaN value detected in column %s", column)
+				}
+			}
+		}
+	}
+	return nil
 }
