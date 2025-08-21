@@ -138,3 +138,72 @@ func (m *MigrationVaildator) PostMigationValidation(tables []string, preValidati
 	}
 	return results, nil
 }
+
+// comparing sample data from source and target
+func (m *MigrationVaildator) validateSampleDataIntegrity(sourceData, targetData []map[string]interface{}) error {
+	if len(sourceData) == 0 && len(targetData) == 0 {
+		return nil
+	}
+
+	if len(sourceData) != len(targetData) {
+		return fmt.Errorf("sample data length mismatch, source:%d, target:%d", len(sourceData), len(targetData))
+	}
+
+	//check first few rows for data integrity
+	checkRows := 5
+	if len(sourceData) < checkRows {
+		checkRows = len(sourceData)
+	}
+
+	for i := 0; i < checkRows; i++ {
+		sourceRow := sourceData[i]
+		targetRow := targetData[i]
+
+		//removing metadata fields for comparison
+		cleanSourceRow := make(map[string]interface{})
+		cleanTargetRow := make(map[string]interface{})
+
+		for k, v := range sourceRow {
+			if k != "_source_table" {
+				cleanSourceRow[k] = v
+			}
+		}
+		for k, v := range targetRow {
+			if k != "_source_table" {
+				cleanTargetRow[k] = v
+			}
+		}
+
+		//comparing key fields (assuming first non-metadata field is primary key)
+		var primaryKey string
+		for k := range cleanSourceRow {
+			primaryKey = k
+			break
+		}
+		if primaryKey != "" {
+			sourceVal := cleanSourceRow[primaryKey]
+			targetVal := cleanTargetRow[primaryKey]
+
+			if !compareValues(sourceVal, targetVal) {
+				return fmt.Errorf("primary key mismatch in row %d: source: %v, target:%v", i, sourceVal, targetVal)
+			}
+		}
+	}
+	return nil
+}
+
+// comparing two values handling type conversion
+func compareValues(v1, v2 interface{}) bool {
+	if v1 == nil && v2 == nil {
+		return true
+	}
+	if v1 == nil || v2 == nil {
+		return false
+	}
+
+	//handling string conversions
+	str1 := fmt.Sprintf("%v", v1)
+	str2 := fmt.Sprintf("%v", v2)
+
+	return str1 == str2
+}
