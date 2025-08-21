@@ -207,3 +207,52 @@ func compareValues(v1, v2 interface{}) bool {
 
 	return str1 == str2
 }
+
+// struct for validation result summary
+type ValidationSummary struct {
+	TotalTables    int
+	ValidTables    int
+	InvalidTables  int
+	TotalRows      int64
+	ValidationTime time.Duration
+	Errors         []string
+}
+
+// creating a summary of the validation result
+func GenerateValidationSummary(results []ValidationResult, startTime time.Time) ValidationSummary {
+	summary := ValidationSummary{
+		TotalTables:    len(results),
+		ValidationTime: time.Since(startTime),
+		Errors:         make([]string, 0),
+	}
+
+	for _, result := range results {
+		summary.TotalRows += result.RowCount
+
+		if result.IsValid {
+			summary.ValidTables++
+		} else {
+			summary.InvalidTables++
+			summary.Errors = append(summary.Errors, fmt.Sprintf("Table %s:%s", result.TableName, result.ErrorMessage))
+		}
+	}
+	return summary
+}
+
+// printing the formatted summary
+func (s ValidationSummary) Print(phase string) {
+	fmt.Printf("\n==%s Validation Summary==\n", phase)
+	fmt.Printf("Total Tables: %d\n", s.TotalTables)
+	fmt.Printf("Valid Tables: %d\n", s.ValidTables)
+	fmt.Printf("Invalid Tables: %d\n", s.InvalidTables)
+	fmt.Printf("Total Rows: %d\n", s.TotalRows)
+	fmt.Printf("Validation Time: %v\n", s.ValidationTime)
+
+	if len(s.Errors) > 0 {
+		fmt.Println("Errors:")
+		for _, err := range s.Errors {
+			fmt.Printf("-%s\n", err)
+		}
+	}
+	fmt.Println("--------------")
+}
