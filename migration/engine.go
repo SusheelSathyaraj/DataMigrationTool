@@ -89,6 +89,51 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 		if preValidationSummary.InvalidTables > 0 {
 			return result, fmt.Errorf("pre-migration validation failed for %d tables", preValidationSummary.InvalidTables)
 		}
-
 	}
+
+	//Step2: Execute Migration depending on mode
+	var migrationErr error
+	switch me.Config.Mode {
+	case FullMigration:
+		migrationErr = me.executeFullMigration(result)
+	case IncrementalMigration:
+		migrationErr = me.executeIncrementalMigration(result)
+	case ScheduledMigration:
+		migrationErr = me.executeScheduledMigration(result)
+	default:
+		return result, fmt.Errorf("unsupported migration mode %s", me.Config.Mode)
+	}
+
+	if migrationErr != nil {
+		result.Errors = append(result.Errors, migrationErr.Error())
+		return result, migrationErr
+	}
+
+	//Step3: Post-Migration Validation
+	if me.Config.ValidateData {
+		postValidation, err := me.Validator.PostMigationValidation(me.Config.Tables, result.PreValidation)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("post migration validation error , v", err))
+			return result, fmt.Errorf("Post Migration Validation Failed, %v", err)
+		}
+		result.PostValidation = postValidation
+
+		postValidationSummary := validation.GenerateValidationSummary(postValidation, startTime)
+		postValidationSummary.Print("Post-Migration")
+
+		//check if migration was successful
+		if postValidationSummary.InvalidTables > 0 {
+			result.Success = false
+			return result, fmt.Errorf("migration validation failed for %d tables", postValidationSummary.InvalidTables)
+		}
+	}
+
+	//Step4: Finalize result
+	result.EndTime = time.Now()
+	result.Duration = result.EndTime.Sub(result.StartTime)
+	result.Success = true
+	result.TotalTablesProcessed = len(me.Config.Tables)
+
+	log.Printf("Migration completed successfully in %v ", result.Duration)
+	return result, nil
 }
