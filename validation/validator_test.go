@@ -317,3 +317,30 @@ func TestValidateSampleDataIntegrity(t *testing.T) {
 	}
 
 }
+
+// benchmark tests
+func BenchmarkPreMigrationValidation(b *testing.B) {
+	sourceClient := NewMockDatabaseClient()
+	targetClient := NewMockDatabaseClient()
+
+	//add large test database
+	var testData []map[string]interface{}
+	for i := 0; i < 1000; i++ {
+		testData = append(testData, map[string]interface{}{
+			"id":   1,
+			"name": "User" + string(rune(i)),
+			"age":  25 + (i % 50),
+		})
+	}
+	sourceClient.AddMockData("users", testData)
+	validator := NewMigrationValidator(sourceClient, targetClient)
+	tables := []string{"users"}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := validator.PreMigrationValidation(tables)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
