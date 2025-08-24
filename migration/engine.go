@@ -137,3 +137,49 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	log.Printf("Migration completed successfully in %v ", result.Duration)
 	return result, nil
 }
+
+// performs a complete full data migration
+func (me *MigrationEngine) executeFullMigration(result *MigrationResult) error {
+	log.Printf("Executing Full Migration...")
+
+	//fetching all data from source
+	var sourceData []map[string]interface{}
+	var err error
+
+	if me.Config.Concurrent && len(me.Config.Tables) > 1 {
+		log.Printf("Using concurrent processing with %d workers", me.Config.Workers)
+		sourceData, err = me.SourceClient.FetchAllDataConcurrently(me.Config.Tables, me.Config.Workers)
+	} else {
+		log.Println("Using sequential processing")
+		sourceData, err = me.SourceClient.FetchAllData(me.Config.Tables)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to fetch source data, %v", err)
+	}
+
+	result.TotalRowsMigrated = int64(len(sourceData))
+	log.Printf("Fetched %d rows from source database", result.TotalRowsMigrated)
+
+	//validating data types before migration
+	if me.Config.ValidateData {
+		if err := me.Validator.ValidateDataTypes(sourceData); err != nil {
+			return fmt.Errorf("data type validation failed, %v", err)
+		}
+	}
+
+	//importing data to target database
+	if me.Config.Concurrent && len(sourceData) > me.Config.BatchSize {
+		log.Printf("Using concurrent batch processing with batch size %d", me.Config.BatchSize)
+		err = me.SourceClient.ImportDataConcurrently(sourceData, me.Config.BatchSize)
+	} else {
+		log.Println("Using sequential import")
+		err = me.SourceClient.ImportData(sourceData)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to import data to target, %v", err)
+	}
+
+	log.Printf("Successfully migrated %d rows to target database", result.TotalRowsMigrated)
+	return nil
+}
