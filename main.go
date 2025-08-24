@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
+	"github.com/SusheelSathyaraj/DataMigrationTool/migration"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/database"
 )
@@ -153,6 +154,45 @@ func main() {
 	} else {
 		fmt.Printf("Found %d tables:: %v", len(tables), tables)
 	}
+
+	//creating migration configuration
+	migrationConfig := migration.MigrationConfig{
+		Mode:         migration.MigrationMode(*mode),
+		SourceDb:     *sourceDB,
+		TargetDb:     *targetDB,
+		Tables:       tables,
+		Workers:      *workers,
+		BatchSize:    *batchsize,
+		Concurrent:   *concurrent,
+		ValidateData: *validate,
+		CreateBackup: *backup,
+	}
+
+	//creating and executing migration
+	migrationEngine := migration.NewMigrationEngine(migrationConfig, sourceClient, targetClient)
+
+	fmt.Println("\n===Starting Migration Process===")
+	result, err := migrationEngine.ExecuteMigration()
+	if err != nil {
+		log.Printf("Migration Failed, %v", err)
+		if result != nil {
+			result.Print()
+		}
+
+		//attempting rollback when failure occurs
+		fmt.Printf("Attempting to rollback migration...")
+		if rollbackErr := migrationEngine.RollbackMigration(); rollbackErr != nil {
+			log.Printf("Rollback failed, %v", rollbackErr)
+		}
+		os.Exit(1)
+	}
+
+	//printing success results
+	result.Print()
+
+	fmt.Printf("\n Migration Completed successfully")
+	fmt.Printf("\n Migrated %d rows across %d tables from source database %s to target database %s in %v",
+		result.TotalRowsMigrated, result.TotalTablesProcessed, *sourceDB, *targetDB, result.Duration)
 
 	// fetch functionality of the source database tables
 	fmt.Println("\n Fetching data from the source database...")
