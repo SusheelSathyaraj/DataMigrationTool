@@ -3,7 +3,9 @@ package validation
 import (
 	"database/sql"
 	"errors"
+	"math"
 	"testing"
+	"time"
 )
 
 // mockdatabase for testing
@@ -196,4 +198,122 @@ func TestPostMigrationValidationRowCountMismatch(t *testing.T) {
 	if postResults[0].ErrorMessage == "" {
 		t.Errorf("Expected error message for row count mismatch")
 	}
+}
+
+func TestValidateDataTypes(t *testing.T) {
+	validator := &MigrationVaildator{}
+
+	testData := []map[string]interface{}{
+		{"id": 1,
+			"name":          "Susheel",
+			"salary":        150000.00,
+			"is_active":     true,
+			"_source_table": "users",
+		},
+	}
+	err := validator.ValidateDataTypes(testData)
+	if err != nil {
+		t.Errorf("Expected no error for valid data types, got %v", err)
+	}
+}
+
+func TestValidateDataTypesWithNaN(t *testing.T) {
+	validator := &MigrationVaildator{}
+
+	testData := []map[string]interface{}{
+		{"id": 1,
+			"invalid_float": float64(0) * math.Inf(1), //NaN
+			"_source_table": "users",
+		},
+	}
+	err := validator.ValidateDataTypes(testData)
+	if err != nil {
+		t.Errorf("Expected error for NaN value, got nil")
+	}
+}
+
+func TestValidationSummary(t *testing.T) {
+	startTime := time.Now()
+
+	results := []ValidationResult{
+		{TableName: "users", IsValid: true, RowCount: 100},
+		{TableName: "orders", IsValid: true, RowCount: 250},
+		{TableName: "products", IsValid: false, RowCount: 0, ErrorMessage: "table not found"},
+	}
+
+	summary := GenerateValidationSummary(results, startTime)
+
+	if summary.TotalTables != 3 {
+		t.Errorf("Expected 3 tables, got %d", summary.TotalRows)
+	}
+
+	if summary.ValidTables != 2 {
+		t.Errorf("Expected 2 valid tables, got %d", summary.ValidTables)
+	}
+
+	if summary.InvalidTables != 1 {
+		t.Errorf("Expected 1 invalide table, got %d", summary.InvalidTables)
+	}
+
+	if summary.TotalRows != 350 {
+		t.Errorf("Expected 350 total no. of rows, got %d", summary.TotalRows)
+	}
+
+	if len(summary.Errors) != 1 {
+		t.Errorf("Expected 1 error, got %d", len(summary.Errors))
+	}
+}
+
+func TestCompareValues(t *testing.T) {
+	testCases := []struct {
+		v1       interface{}
+		v2       interface{}
+		expected bool
+	}{
+		{nil, nil, true},
+		{nil, "something", false},
+		{"hello", "world", true},
+		{123, 123, true},
+		{123, "123", true}, //string conversion should match
+		{123.45, 123.45, true},
+		{"hello", "world", false},
+	}
+
+	for i, tc := range testCases {
+		result := compareValues(tc.v1, tc.v2)
+		if result != tc.expected {
+			t.Errorf("Test Case %d: CompareValues(%v,%v)=%v, expected %v", i+1, tc.v1, tc.v2, result, tc.expected)
+		}
+	}
+}
+
+func TestValidateSampleDataIntegrity(t *testing.T) {
+	validator := &MigrationVaildator{}
+
+	sourceData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel", "_source_table": "users"},
+		{"id": 2, "name": "Sathyaraj", "_source_table": "users"},
+	}
+
+	targetData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel", "_source_table": "users"},
+		{"id": 2, "name": "Sathyaraj", "_source_table": "users"},
+	}
+
+	err := validator.validateSampleDataIntegrity(sourceData, targetData)
+	if err != nil {
+		t.Errorf("Expected no error for matching data, got %v", err)
+	}
+
+	//test with mismatched data
+	targetDataMismatch := []map[string]interface{}{
+		{"id": 1, "name": "Susheel", "_source_table": "users"},
+		{"id": 3, "name": "Sathyaraj", "_source_table": "users"},
+	}
+
+	err = validator.validateSampleDataIntegrity(sourceData, targetDataMismatch)
+	if err == nil {
+		t.Errorf("Expected error for mismatched data, got nil")
+	}
+
 }
