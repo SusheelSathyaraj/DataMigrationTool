@@ -274,3 +274,5 @@ func getTablesOrCollections(sourceDB string, cfg *config.Config, sourceClient da
 		return nil, fmt.Errorf("unsupported database type %s", sourceDB)
 	}
 }
+
+//ToDo: check on fetch block
