@@ -113,8 +113,8 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	if me.Config.ValidateData {
 		postValidation, err := me.Validator.PostMigationValidation(me.Config.Tables, result.PreValidation)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("post migration validation error , v", err))
-			return result, fmt.Errorf("Post Migration Validation Failed, %v", err)
+			result.Errors = append(result.Errors, fmt.Sprintf("post migration validation error , %v", err))
+			return result, fmt.Errorf("post Migration Validation Failed, %v", err)
 		}
 		result.PostValidation = postValidation
 
@@ -202,4 +202,35 @@ func (me *MigrationEngine) executeScheduledMigration(result *MigrationResult) er
 	//2.managing job state
 	//3.handling concurrent job execution
 	return fmt.Errorf("scheduled migration not implemented")
+}
+
+// printing the formatted result of migration
+func (mr *MigrationResult) Print() {
+	fmt.Println("\n=== Migration Result===")
+	fmt.Printf("Success: %v\n", mr.Success)
+	fmt.Printf("Duration %v\n", mr.Duration)
+	fmt.Printf("Tables Processed %v\n", mr.TotalTablesProcessed)
+	fmt.Printf("Rows Migrated %v\n", mr.TotalRowsMigrated)
+	fmt.Printf("Start Time %s\n", mr.StartTime.Format("2025-08-24 20:09:45"))
+	fmt.Printf("End Time %s\n", mr.EndTime.Format("2025-08-24 20:09:45"))
+
+	if len(mr.Errors) > 0 {
+		fmt.Println("\n Errors:")
+		for _, err := range mr.Errors {
+			fmt.Printf("-%s\n", err)
+		}
+	}
+	fmt.Println("===============")
+}
+
+// Rollback for a failed migration (placeholder)
+func (me *MigrationEngine) RollbackMigration() error {
+	log.Println("Attempting migration rollback...")
+
+	//TODO: implement rollback logic
+	//1.identify what was migrated
+	//2.removing migrated data from target
+	//restore from backup if available
+
+	return fmt.Errorf("rollback functionality not implemented")
 }
