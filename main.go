@@ -68,6 +68,8 @@ func main() {
 	workers := flag.Int("workers", runtime.NumCPU(), "Number of worker goroutines for concurrent processing")
 	batchsize := flag.Int("batch-size", 1000, "Batch size for data processing")
 	concurrent := flag.Bool("concurrent", true, "Enable concurrent processing")
+	validate := flag.Bool("validate", true, "Enable data validation")
+	backup := flag.Bool("backup", false, "Create Backup before migration")
 
 	//parsing the user input
 	flag.Parse()
@@ -91,7 +93,7 @@ func main() {
 		fmt.Printf("Using concurrent processing with %d workers and batchsize %d", *workers, *batchsize)
 	}
 
-	//checking the connection to database
+	//create source database client
 	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
 
 	var sourceClient database.DatabaseClient
@@ -111,7 +113,29 @@ func main() {
 		log.Fatalf("Failed to connect to %s Database, %v", *sourceDB, err)
 	}
 	defer sourceClient.Close()
-	fmt.Printf("successfully connected to the %s database", *sourceDB)
+	fmt.Printf("successfully connected to the source database %s", *sourceDB)
+
+	// creating target database client
+	fmt.Printf("Connecting to  source database %s\n", *targetDB)
+	var targetClient database.DatabaseClient
+
+	switch strings.ToLower(*targetDB) {
+	case "mysql":
+		targetClient = database.NewMYSQLClientFromConfig(cfg)
+	case "postgresql":
+		targetClient = database.NewPostgreSQLClientFromConfig(cfg)
+	case "mongodb":
+		targetClient = database.NewMongoDBClientFromConfig(cfg)
+	default:
+		log.Fatalf("Unsupported source database type, %s", *targetDB)
+	}
+
+	if err := targetClient.Connect(); err != nil {
+		log.Fatalf("Failed to connect to the target database %s, %v", *targetDB, err)
+	}
+
+	defer targetClient.Close()
+	fmt.Printf("successfully connected to the target database %s\n", *targetDB)
 
 	//Parsing SQL file or discovering collections for mongodb
 	fmt.Println("Discovering tables and collections...")
