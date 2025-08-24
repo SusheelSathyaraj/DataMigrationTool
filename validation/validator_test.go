@@ -43,3 +43,17 @@ func (m *MockDatabaseClient) FetchAllData(tables []string) ([]map[string]interfa
 	}
 	return allData, nil
 }
+
+func NewMockDatabaseClient() *MockDatabaseClient {
+	return &MockDatabaseClient{
+		mockData: make(map[string][]map[string]interface{}),
+	}
+}
+
+func (m *MockDatabaseClient) AddMockData(table string, data []map[string]interface{}) {
+	m.mockData[table] = data
+}
+
+func (m *MockDatabaseClient) SetFailOn(table string) {
+	m.failOn = table
+}
