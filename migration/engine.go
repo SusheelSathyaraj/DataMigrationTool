@@ -183,3 +183,23 @@ func (me *MigrationEngine) executeFullMigration(result *MigrationResult) error {
 	log.Printf("Successfully migrated %d rows to target database", result.TotalRowsMigrated)
 	return nil
 }
+
+// performing incremental data migration(placeholder)
+func (me *MigrationEngine) executeIncrementalMigration(result *MigrationResult) error {
+	log.Println("Executing 	incremental migration...")
+	//TODO: implement incremental migration logic
+	//1.identify changed records since last migration
+	//2.fetching only the delta data
+	//3.performing upsert operations on target
+	return fmt.Errorf("incremental migration not implemented")
+}
+
+// performing scheduled data migration(placeholder)
+func (me *MigrationEngine) executeScheduledMigration(result *MigrationResult) error {
+	log.Println("Executing Scheduled Migration...")
+	//TODO: implent scheduled migration logic
+	//1.setting up cron jobs
+	//2.managing job state
+	//3.handling concurrent job execution
+	return fmt.Errorf("scheduled migration not implemented")
+}
