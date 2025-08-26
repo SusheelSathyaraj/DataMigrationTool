@@ -134,14 +134,17 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	}
 
 	if migrationErr != nil {
+		me.Logger.Error("Migration Failed", migrationErr.Error())
 		result.Errors = append(result.Errors, migrationErr.Error())
 		return result, migrationErr
 	}
 
 	//Step3: Post-Migration Validation
 	if me.Config.ValidateData {
+		me.Logger.Info("Starting Post-Migration Validation")
 		postValidation, err := me.Validator.PostMigationValidation(me.Config.Tables, result.PreValidation)
 		if err != nil {
+			me.Logger.Error("Post-Migration VAlidation error", err.Error())
 			result.Errors = append(result.Errors, fmt.Sprintf("post migration validation error , %v", err))
 			return result, fmt.Errorf("post Migration Validation Failed, %v", err)
 		}
@@ -152,9 +155,11 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 
 		//check if migration was successful
 		if postValidationSummary.InvalidTables > 0 {
+			me.Logger.Error("Migration Validation failed", fmt.Sprintf("%d tables failed post migration validation", postValidationSummary.InvalidTables))
 			result.Success = false
 			return result, fmt.Errorf("migration validation failed for %d tables", postValidationSummary.InvalidTables)
 		}
+		me.Logger.Info("Post-Migration VAlidation completed Successfully")
 	}
 
 	//Step4: Finalize result
@@ -163,53 +168,83 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	result.Success = true
 	result.TotalTablesProcessed = len(me.Config.Tables)
 
+	me.Logger.Info(fmt.Sprintf("Migration completed Successfully in %v", result.Duration))
 	log.Printf("Migration completed successfully in %v ", result.Duration)
 	return result, nil
 }
 
 // performs a complete full data migration
 func (me *MigrationEngine) executeFullMigration(result *MigrationResult) error {
+	me.Logger.Info("Executing Full Migration")
 	log.Printf("Executing Full Migration...")
 
-	//fetching all data from source
-	var sourceData []map[string]interface{}
-	var err error
+	//processing tables individually for better tracking
+	for i, table := range me.Config.Tables {
+		me.ProgressTracker.SetCurrentTable(table)
+		me.Logger.TableProgress(table, 0, "Starting table Migration")
 
-	if me.Config.Concurrent && len(me.Config.Tables) > 1 {
-		log.Printf("Using concurrent processing with %d workers", me.Config.Workers)
-		sourceData, err = me.SourceClient.FetchAllDataConcurrently(me.Config.Tables, me.Config.Workers)
-	} else {
-		log.Println("Using sequential processing")
-		sourceData, err = me.SourceClient.FetchAllData(me.Config.Tables)
-	}
+		//fetching data from current table
+		var tableData []map[string]interface{}
+		var err error
 
-	if err != nil {
-		return fmt.Errorf("failed to fetch source data, %v", err)
-	}
-
-	result.TotalRowsMigrated = int64(len(sourceData))
-	log.Printf("Fetched %d rows from source database", result.TotalRowsMigrated)
-
-	//validating data types before migration
-	if me.Config.ValidateData {
-		if err := me.Validator.ValidateDataTypes(sourceData); err != nil {
-			return fmt.Errorf("data type validation failed, %v", err)
+		if me.Config.Concurrent && len(me.Config.Tables) > 1 {
+			tableData, err = me.SourceClient.FetchAllDataConcurrently([]string{table}, 1)
+		} else {
+			tableData, err = me.SourceClient.FetchAllData([]string{table})
 		}
+
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to fetch data from table %s, %v", table, err)
+			me.Logger.Error("Table Fetching Failed", errorMsg)
+			me.ProgressTracker.AddError(errorMsg)
+			return fmt.Errorf(errorMsg)
+		}
+
+		tableRowCount := int64(len(tableData))
+		me.Logger.TableProgress(table, tableRowCount, fmt.Sprintf("Fetched %d rows ", tableRowCount))
+
+		//validating data types before migration
+		if me.Config.ValidateData && len(tableData) > 0 {
+			if err := me.Validator.ValidateDataTypes(tableData); err != nil {
+				errorMsg := fmt.Sprintf("data type validation failed for table %s, %v", table, err)
+				me.Logger.Error("Data Type Validation Failed", errorMsg)
+				me.ProgressTracker.AddError(errorMsg)
+				return fmt.Errorf(errorMsg)
+			}
+		}
+
+		//importing data to target database with batch tracking
+		if me.Config.Concurrent && len(tableData) > me.Config.BatchSize {
+			me.Logger.TableProgress(table, tableRowCount, fmt.Sprintf("Starting Concurrent import with batchsize %d", me.Config.BatchSize))
+
+			//creating batch tracker for this table
+			batchTracker := me.ProgressTracker.NewBatchTracker(me.Config.BatchSize)
+
+			//overriding the import to track batched
+			err = me.importDataWithBatchTracking(tableData, batchTracker)
+		} else {
+			me.Logger.TableProgress(table, tableRowCount, "Starting Sequential Import")
+			err = me.TargetClient.ImportData(tableData)
+			me.ProgressTracker.UpdateProgress(tableRowCount)
+		}
+
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to import data for table %s, %v", table, err)
+			me.Logger.Error("Table Import Failed", errorMsg)
+			me.ProgressTracker.AddError(errorMsg)
+			return fmt.Errorf(errorMsg)
+		}
+
+		me.ProgressTracker.CompletedTable()
+		me.Logger.TableProgress(table, tableRowCount, "Table Migration Completed Successfully")
+		result.TotalRowsMigrated += tableRowCount
+
+		log.Printf("Successfully migrated table %s (%d/%d) with %d rows", table, i+1, len(me.Config.Tables), tableRowCount)
 	}
 
-	//importing data to target database
-	if me.Config.Concurrent && len(sourceData) > me.Config.BatchSize {
-		log.Printf("Using concurrent batch processing with batch size %d", me.Config.BatchSize)
-		err = me.SourceClient.ImportDataConcurrently(sourceData, me.Config.BatchSize)
-	} else {
-		log.Println("Using sequential import")
-		err = me.SourceClient.ImportData(sourceData)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to import data to target, %v", err)
-	}
+	me.Logger.Info(fmt.Sprintf("Full Migration Completed -%d rows migrated", result.TotalRowsMigrated))
+	log.Printf("Successfully Migrated %d rows across %d tables", result.TotalRowsMigrated, len(me.Config.Tables))
 
-	log.Printf("Successfully migrated %d rows to target database", result.TotalRowsMigrated)
 	return nil
 }
 
@@ -262,4 +297,28 @@ func (me *MigrationEngine) RollbackMigration() error {
 	//restore from backup if available
 
 	return fmt.Errorf("rollback functionality not implemented")
+}
+
+// importing data with detail batch progress trackking
+func (me *MigrationEngine) importDataWithBatchTracking(data []map[string]interface{}, batchTracker *monitoring.BatchTracker) error {
+	batchSize := me.Config.BatchSize
+	totalBatches := (len(data) + batchSize - 1) / batchSize //ceiling division
+
+	for i := 0; i < len(data); i++ {
+		end := i + batchSize
+		if end > len(data) {
+			end = len(data)
+		}
+		batch := data[i:end]
+		batchNumber := (i / batchSize) + 1
+
+		batchTracker.StartBatch(batchNumber)
+
+		//importing the batch
+		if err := me.TargetClient.ImportData(batch); err != nil {
+			return fmt.Errorf("failed to import batch %d / %d, %v", batchNumber, totalBatches, err)
+		}
+		batchTracker.CompleteBatch(int64(len(batch)))
+	}
+	return nil
 }
