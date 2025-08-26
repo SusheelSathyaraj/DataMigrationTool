@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/database"
+	"github.com/SusheelSathyaraj/DataMigrationTool/monitoring"
 	"github.com/SusheelSathyaraj/DataMigrationTool/validation"
 )
 
@@ -34,10 +35,12 @@ type MigrationConfig struct {
 
 // Migration process keeper
 type MigrationEngine struct {
-	Config       MigrationConfig
-	SourceClient database.DatabaseClient
-	TargetClient database.DatabaseClient
-	Validator    *validation.MigrationVaildator
+	Config          MigrationConfig
+	SourceClient    database.DatabaseClient
+	TargetClient    database.DatabaseClient
+	Validator       *validation.MigrationVaildator
+	ProgressTracker *monitoring.ProcessTracker
+	Logger          *monitoring.MigrationLogger
 }
 
 // Results of the migration
@@ -55,11 +58,17 @@ type MigrationResult struct {
 
 // creating a new migration engine
 func NewMigrationEngine(config MigrationConfig, source, target database.DatabaseClient) *MigrationEngine {
+	//initialising with estimated row count(will be updated during validation)
+	progressTracker := monitoring.NewProgressTracker(0, len(config.Tables))
+	logger := monitoring.NewMigrationLogger()
+
 	return &MigrationEngine{
-		Config:       config,
-		SourceClient: source,
-		TargetClient: target,
-		Validator:    validation.NewMigrationValidator(source, target),
+		Config:          config,
+		SourceClient:    source,
+		TargetClient:    target,
+		Validator:       validation.NewMigrationValidator(source, target),
+		ProgressTracker: progressTracker,
+		Logger:          logger,
 	}
 }
 
@@ -72,24 +81,44 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 		Errors:    make([]string, 0),
 	}
 
+	me.Logger.Info(fmt.Sprintf("Starting %s migration from %s to %s", me.Config.Mode, me.Config.SourceDb, me.Config.TargetDb))
 	log.Printf("Starting %s migation from %s to %s", me.Config.Mode, me.Config.SourceDb, me.Config.TargetDb)
 
 	//Step1: Premigration  validation
 	if me.Config.ValidateData {
+		me.Logger.Info("Starting Pre-Migration Validation")
 		preValidation, err := me.Validator.PreMigrationValidation(me.Config.Tables)
 		if err != nil {
+			me.Logger.Error("Pre-Migration Validation failed", err.Error())
 			return result, fmt.Errorf("pre-migration validation failed, %v", err)
 		}
 		result.PreValidation = preValidation
+
+		//updating progress tracker with actual row count
+		var totalRows int64
+		for _, validation := range preValidation {
+			totalRows += validation.RowCount
+		}
+		me.ProgressTracker = monitoring.NewProgressTracker(totalRows, len(me.Config.Tables))
 
 		preValidationSummary := validation.GenerateValidationSummary(preValidation, startTime)
 		preValidationSummary.Print("Pre-Migration")
 
 		//checking for any failed tables validation
 		if preValidationSummary.InvalidTables > 0 {
+			me.Logger.Error("Pre-Migration Validation failed", fmt.Sprintf("%d tables failed validation", preValidationSummary.InvalidTables))
 			return result, fmt.Errorf("pre-migration validation failed for %d tables", preValidationSummary.InvalidTables)
 		}
+		me.Logger.Info(fmt.Sprintf("Pre-Migration Validation Completed Successfully - %d rows across %d tables", totalRows, len(me.Config.Tables)))
 	}
+
+	//Starting progress monitoring
+	stopProgress := me.ProgressTracker.StartProgressMonitor(2 * time.Second)
+	defer func() {
+		stopProgress <- struct{}{}
+		me.ProgressTracker.PrintFinalSummary()
+		me.Logger.Close()
+	}()
 
 	//Step2: Execute Migration depending on mode
 	var migrationErr error
