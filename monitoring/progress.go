@@ -148,3 +148,21 @@ func (pt *ProcessTracker) PrintProgress() {
 		fmt.Printf("| Current: %s", metrics.CurrentTable)
 	}
 }
+
+// formats the duration in a human readable way
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%dh%dm%ds", hours, minutes, seconds)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm%ds", minutes, seconds)
+	} else {
+		return fmt.Sprintf("%ds", seconds)
+	}
+}
