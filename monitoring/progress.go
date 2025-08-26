@@ -209,3 +209,70 @@ func (pt *ProcessTracker) PrintFinalSummary() {
 	}
 	fmt.Printf("=============")
 }
+
+// Health information
+type HealthCheck struct {
+	IsHealthy    bool          `json:"is_healthy"`
+	LastActivity time.Time     `json:"last_activity"`
+	Uptime       time.Duration `json:"uptime"`
+	MemoryUsage  string        `json:"memory_usage"`
+	Status       string        `json:"status"`
+}
+
+func (pt *ProcessTracker) GetHealthCheck() HealthCheck {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	timeSinceLastUpdate := time.Since(pt.lastUpdate)
+	isHealthy := timeSinceLastUpdate < 30*time.Second //healthy if updated with 30secs
+
+	var status string
+	if pt.processedTables == pt.totalTables && atomic.LoadInt64(&pt.processedRows) == pt.totalRows {
+		status = "completed"
+	} else if isHealthy {
+		status = "running"
+	} else {
+		status = "stalled"
+	}
+
+	return HealthCheck{
+		IsHealthy:    isHealthy,
+		LastActivity: pt.lastUpdate,
+		Uptime:       time.Since(pt.startTime),
+		Status:       status,
+	}
+}
+
+// tracking within batches for better individual monitoring
+type BatchTracker struct {
+	pt             *ProcessTracker
+	batchSize      int
+	currentBatch   int
+	batchStartTime time.Time
+}
+
+// creating a tracker for batch level operations
+func (pt *ProcessTracker) NewBatchTracker(batchSize int) *BatchTracker {
+	return &BatchTracker{
+		pt:             pt,
+		batchSize:      batchSize,
+		batchStartTime: time.Now(),
+	}
+}
+
+// begining of the new batch
+func (bt *BatchTracker) StartBatch(batchNumber int) {
+	bt.currentBatch = batchNumber
+	bt.batchStartTime = time.Now()
+}
+
+// marking the batch as completed
+func (bt *BatchTracker) CompleteBatch(rowsInBatch int64) {
+	bt.pt.UpdateProgress(rowsInBatch)
+
+	batchDuration := time.Since(bt.batchStartTime)
+	if batchDuration > 0 {
+		batchSpeed := float64(rowsInBatch) / batchDuration.Seconds() //since we need rows/sec
+		fmt.Printf("\n Batch %d completed: %d rows in %v (%.0f rows/sec)", bt.currentBatch, rowsInBatch, formatDuration(batchDuration), batchSpeed)
+	}
+}
