@@ -276,3 +276,90 @@ func (bt *BatchTracker) CompleteBatch(rowsInBatch int64) {
 		fmt.Printf("\n Batch %d completed: %d rows in %v (%.0f rows/sec)", bt.currentBatch, rowsInBatch, formatDuration(batchDuration), batchSpeed)
 	}
 }
+
+// structured logging the migration
+type MigrationLogger struct {
+	logChan chan LogEntry
+	//file    string //todo: writting to a file
+}
+
+type LogEntry struct {
+	TimeStamp time.Time `json:"time_stamp"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	Table     string    `json:"table,omitempty"`
+	RowCount  int64     `json:"row_count,omitempty"`
+	Error     string    `json:"error,omitempty"`
+}
+
+// creating a new migration logger
+func NewMigrationLogger() *MigrationLogger {
+	ml := &MigrationLogger{
+		logChan: make(chan LogEntry, 100),
+	}
+
+	//starting log processor
+	go ml.processLogs()
+
+	return ml
+}
+
+// processing log entries (todo: writting to a file)
+func (ml *MigrationLogger) processLogs() {
+	for entry := range ml.logChan {
+		//printing stdout with formatting
+		switch entry.Level {
+		case "ERROR":
+			fmt.Printf("[%s]ERROR: %s", entry.TimeStamp.Format("21:55:15"), entry.Message)
+			if entry.Error != "" {
+				fmt.Printf(" -%s\n", entry.Error)
+			}
+			fmt.Println()
+		case "INFO":
+			fmt.Printf("[%s] INFO: %s", entry.TimeStamp.Format("21:55:15"), entry.Message)
+			if entry.Table != "" {
+				fmt.Printf("(Table: %s", entry.Table)
+				if entry.RowCount > 0 {
+					fmt.Printf(", Rows: %d", entry.RowCount)
+				}
+				fmt.Printf(")")
+			}
+			fmt.Println()
+		}
+	}
+}
+
+// logging an info message
+func (ml *MigrationLogger) Info(message string) {
+	ml.logChan <- LogEntry{
+		TimeStamp: time.Now(),
+		Level:     "INFO",
+		Message:   message,
+	}
+}
+
+// logging an error message
+func (ml *MigrationLogger) Error(message, errorMsg string) {
+	ml.logChan <- LogEntry{
+		TimeStamp: time.Now(),
+		Level:     "ERROR",
+		Message:   message,
+		Error:     errorMsg,
+	}
+}
+
+// logging tab1e specfic progress
+func (ml *MigrationLogger) TableProgress(table string, rowCount int64, message string) {
+	ml.logChan <- LogEntry{
+		TimeStamp: time.Now(),
+		Level:     "INFO",
+		Message:   message,
+		Table:     table,
+		RowCount:  rowCount,
+	}
+}
+
+// closing the logger
+func (ml *MigrationLogger) Close() {
+	close(ml.logChan)
+}
