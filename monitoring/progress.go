@@ -166,3 +166,46 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%ds", seconds)
 	}
 }
+
+// starting goroutine for printing progress updates
+func (pt *ProcessTracker) StartProgressMonitor(interval time.Duration) chan struct{} {
+	stopChan := make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				pt.PrintProgress()
+			case <-stopChan:
+				pt.PrintProgress() //final update
+				fmt.Println()      //new line after printing progress
+				return
+			}
+		}
+	}()
+	return stopChan
+}
+
+// printing final progress summary
+func (pt *ProcessTracker) PrintFinalSummary() {
+	metrics := pt.GetMetrics()
+
+	fmt.Println("\n=====Migration Summary====")
+	fmt.Printf("Total Duration %v\n", formatDuration(metrics.ElapsedTime))
+	fmt.Printf("Rows Processed: %d / %d (%.1f%%)\n", metrics.ProcessedRows, metrics.TotalRows, metrics.ProgressPercent)
+	fmt.Printf("Tables Processed: %d / %d\n", metrics.ProcessedTables, metrics.TotalTables)
+	fmt.Printf("Average Speed: %.0f rows/sec (%.0f rows/min)\n", metrics.RowsPerSecond, metrics.RowsPerSecond*60)
+	fmt.Printf("Tables per Minute: %.1f\n", metrics.TablesPerMinute)
+
+	if metrics.ErrorCount > 0 {
+		fmt.Printf("Errrors Encountered: %d\n", metrics.ErrorCount)
+		fmt.Println("\n Recent Errors:")
+		for _, err := range pt.GetRecentErrors(5) {
+			fmt.Printf(" -%s\n", err)
+		}
+	}
+	fmt.Printf("=============")
+}
