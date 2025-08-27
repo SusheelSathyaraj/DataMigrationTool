@@ -171,3 +171,90 @@ func TestMigrationEngineWithFetchError(t *testing.T) {
 		t.Errorf("Expected errors in result, got none")
 	}
 }
+
+func TestMigrationEngineWithImportError(t *testing.T) {
+	sourceClient := NewMockDatabaseClient()
+	targetClient := NewMockDatabaseClient()
+
+	testData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel", "age": 30},
+	}
+	sourceClient.AddMockData("users", testData)
+
+	targetClient.SetFailOnImport(true)
+
+	config := MigrationConfig{
+		Mode:         FullMigration,
+		SourceDb:     "mysql",
+		TargetDb:     "postgresql",
+		Tables:       []string{"users"},
+		ValidateData: false, //disabling validation as it is for testing import error
+	}
+
+	engine := NewMigrationEngine(config, sourceClient, targetClient)
+
+	result, err := engine.ExecuteMigration()
+
+	if err == nil {
+		t.Errorf("Expected error due to import failure, got nil")
+	}
+
+	if result.Success {
+		t.Errorf("Expected migration failure, got success")
+	}
+}
+
+func TestMigrationEngineMultipleTables(t *testing.T) {
+	sourceClient := NewMockDatabaseClient()
+	targetClient := NewMockDatabaseClient()
+
+	//add data for multiple tables
+	usersData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel"},
+		{"id": 2, "name": "Sathyaraj"},
+	}
+
+	ordersData := []map[string]interface{}{
+		{"id": 1, "user_id": 1, "amount": 100.50},
+		{"id": 2, "user_id": 2, "amount": 10},
+		{"id": 3, "user_id": 1, "amount": 5070.50},
+	}
+
+	sourceClient.AddMockData("users", usersData)
+	sourceClient.AddMockData("orders", ordersData)
+
+	config := MigrationConfig{
+		Mode:         FullMigration,
+		SourceDb:     "mysql",
+		TargetDb:     "postgresql",
+		Tables:       []string{"users", "orders"},
+		ValidateData: true,
+	}
+
+	engine := NewMigrationEngine(config, sourceClient, targetClient)
+
+	result, err := engine.ExecuteMigration()
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected successful migration, got failure")
+	}
+
+	if result.TotalRowsMigrated != 5 {
+		t.Errorf("Expected 5 rows to be migrated, got %d", result.TotalRowsMigrated)
+	}
+
+	if result.TotalTablesProcessed != 2 {
+		t.Errorf("Expected 2 tables to be processed, got %d", result.TotalTablesProcessed)
+	}
+
+	//checking for import data
+	importedData := targetClient.GetImportedData()
+
+	if len(importedData) != 5 {
+		t.Errorf("Expected 5 imported rows, found %d", len(importedData))
+	}
+}
