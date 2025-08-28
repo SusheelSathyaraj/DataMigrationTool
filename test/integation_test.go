@@ -117,3 +117,15 @@ func (m *MockDatabaseForIntegration) ImportDataConcurrently(data []map[string]in
 	}
 	return nil
 }
+
+func (m *MockDatabaseForIntegration) AddTestData(table string, data []map[string]interface{}) {
+	m.data[table] = data
+}
+
+func (m *MockDatabaseForIntegration) GetImportedData(table string) []map[string]interface{} {
+	return m.importedData[table]
+}
+
+func (m *MockDatabaseForIntegration) GetAllImportedData() map[string][]map[string]interface{} {
+	return m.importedData
+}
