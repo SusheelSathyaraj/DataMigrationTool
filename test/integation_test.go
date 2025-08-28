@@ -6,15 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SusheelSathyaraj/DataMigrationTool/database"
 	"github.com/SusheelSathyaraj/DataMigrationTool/migration"
 )
 
 // struct to run end to end migration
-type IntegrationTestSuite struct {
+/*type IntegrationTestSuite struct {
 	sourceClient database.DatabaseClient
 	targetClient database.DatabaseClient
-}
+}*/
 
 // struct for mock
 type MockDatabaseForIntegration struct {
@@ -344,5 +343,43 @@ func TestConcurrencyMigrationPerformance(t *testing.T) {
 				t.Errorf("Performance too slow, %.0f rows/sec", rowsPerSecond)
 			}
 		})
+	}
+}
+
+func BenchmarkIntegrationFullMigration(b *testing.B) {
+	sourceDB := NewMockDatabaseForIntegration("mysql")
+
+	//adding benchmark data
+	benchData := []map[string]interface{}{
+		{"id": 1, "data": "benchmark_data_1"},
+		{"id": 2, "data": "benchmark_data_2"},
+		{"id": 3, "data": "benchmark_data_3"},
+	}
+	sourceDB.AddTestData("bench_table", benchData)
+
+	config := migration.MigrationConfig{
+		Mode:         migration.FullMigration,
+		SourceDb:     "mysql",
+		TargetDb:     "postgresql",
+		Tables:       []string{"bench_table"},
+		ValidateData: false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		targetDB := NewMockDatabaseForIntegration("postgresql")
+
+		sourceDB.Connect()
+		targetDB.Connect()
+
+		engine := migration.NewMigrationEngine(config, sourceDB, targetDB)
+		_, err := engine.ExecuteMigration()
+
+		sourceDB.Close()
+		targetDB.Close()
+
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
