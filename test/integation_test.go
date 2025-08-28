@@ -228,3 +228,121 @@ func TestFullMigrationIntegration(t *testing.T) {
 	t.Logf("Rows: %d", result.TotalRowsMigrated)
 	t.Logf("Tables: %d", result.TotalTablesProcessed)
 }
+
+func TestMigrationWithValidationFailure(t *testing.T) {
+	sourceDB := NewMockDatabaseForIntegration("mysql")
+	targetDB := NewMockDatabaseForIntegration("postgresql")
+
+	//adding testdata to source but not target to simulate validation failure
+	testData := []map[string]interface{}{
+		{"id": 1, "name": "test"},
+	}
+	sourceDB.AddTestData("users", testData)
+
+	config := migration.MigrationConfig{
+		Mode:         migration.FullMigration,
+		SourceDb:     "mysql",
+		TargetDb:     "postgresql",
+		Tables:       []string{"users"},
+		ValidateData: true,
+	}
+
+	//Conencting to the databases
+	sourceDB.Connect()
+	targetDB.Connect()
+	defer sourceDB.Close()
+	defer targetDB.Close()
+
+	engine := migration.NewMigrationEngine(config, sourceDB, targetDB)
+	result, err := engine.ExecuteMigration()
+
+	//migration should succeed since we are testing full flow
+	if err != nil {
+		t.Fatalf("Migration Failed unexpectedly, %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected Migration Success, got failure")
+	}
+
+	if len(result.PreValidation) == 0 {
+		t.Errorf("Expected prevalidation results, got none")
+	}
+
+	if len(result.PostValidation) == 0 {
+		t.Errorf("Expected postvalidation results, got none")
+	}
+}
+
+func TestConcurrencyMigrationPerformance(t *testing.T) {
+	sourceDB := NewMockDatabaseForIntegration("mysql")
+
+	//creating a larger  dataset for performance testing
+	var largeDataset []map[string]interface{}
+	for i := 0; i < 1000; i++ {
+		largeDataset = append(largeDataset, map[string]interface{}{
+			"id":     i,
+			"name":   fmt.Sprintf("user_%d", i),
+			"email":  fmt.Sprintf("user_%d@example.com", i),
+			"score":  float64(i * 10),
+			"active": i%2 == 0,
+		})
+	}
+	sourceDB.AddTestData("large_table", largeDataset)
+
+	//test sequential vs concurrent
+	testCases := []struct {
+		name       string
+		concurrent bool
+		batchSize  int
+		workers    int
+	}{
+		{"Sequential", false, 1000, 1},
+		{"Concurrent_Small_Batch", true, 100, 4},
+		{"Concurrent_Large_Batch", true, 500, 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			//resetting target database
+			targetDB := NewMockDatabaseForIntegration("postgresql")
+
+			config := migration.MigrationConfig{
+				Mode:         migration.FullMigration,
+				SourceDb:     "mysql",
+				TargetDb:     "postgresql",
+				Tables:       []string{"large_table"},
+				Workers:      tc.workers,
+				BatchSize:    tc.batchSize,
+				Concurrent:   tc.concurrent,
+				ValidateData: false, //disable for performance testing
+			}
+
+			sourceDB.Connect()
+			targetDB.Connect()
+			defer sourceDB.Close()
+			defer targetDB.Close()
+
+			startTime := time.Now()
+			engine := migration.NewMigrationEngine(config, sourceDB, targetDB)
+			result, err := engine.ExecuteMigration()
+			duration := time.Since(startTime)
+
+			if err != nil {
+				t.Fatalf("Migration Failed, %v", err)
+			}
+
+			if result.TotalRowsMigrated != 1000 {
+				t.Errorf("Expected 1000 rows to be migrated, got %d", result.TotalRowsMigrated)
+			}
+
+			rowsPerSecond := float64(result.TotalRowsMigrated) / duration.Seconds()
+			t.Logf("%s: %d rows in %v (%.0f rows/sec)", tc.name, result.TotalRowsMigrated, duration, rowsPerSecond)
+
+			//basic performance assertion
+			if rowsPerSecond < 100 { //minimum expected performance
+				t.Errorf("Performance too slow, %.0f rows/sec", rowsPerSecond)
+			}
+		})
+	}
+}
