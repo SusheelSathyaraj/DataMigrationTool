@@ -171,3 +171,24 @@ func (rm *RollBackManager) LoadSnapshot(snapshotID string) (*MigrationSnapshot, 
 	}
 	return &snapshot, nil
 }
+
+// marking the snapshot as completed
+func (rm *RollBackManager) MarkSnapshotCompleted(snapshotID string) error {
+	snapshot, err := rm.LoadSnapshot(snapshotID)
+	if err != nil {
+		return err
+	}
+
+	snapshot.Status = "completed"
+	return rm.saveSnapshot(snapshot)
+}
+
+// marking the snapshot as failed
+func (rm *RollBackManager) MarkSnapshotFailed(snapshotID string) error {
+	snapshot, err := rm.LoadSnapshot(snapshotID)
+	if err != nil {
+		return err
+	}
+	snapshot.Status = "failed"
+	return rm.saveSnapshot(snapshot)
+}
