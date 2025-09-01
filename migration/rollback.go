@@ -192,3 +192,91 @@ func (rm *RollBackManager) MarkSnapshotFailed(snapshotID string) error {
 	snapshot.Status = "failed"
 	return rm.saveSnapshot(snapshot)
 }
+
+// performing rollback using snapshot
+func (rm *RollBackManager) RollBackMigration(snapshotID string) error {
+	rm.logger.Info(fmt.Sprintf("Starting rollback for migration %s", snapshotID))
+
+	snapshot, err := rm.LoadSnapshot(snapshotID)
+	if err != nil {
+		return fmt.Errorf("failed to load the snapshot, %v", err)
+	}
+
+	if snapshot.Status == "rolled_back" {
+		return fmt.Errorf("migration %s has already been rolled back", snapshotID)
+	}
+
+	//rollback each table
+	for tableName, tableSnapshot := range snapshot.PreMigrationState {
+		rm.logger.Info(fmt.Sprintf("Rolling back table, %s", tableName))
+
+		if err := rm.rollbackTable(tableName, tableSnapshot, snapshot.MigratedData[tableName]); err != nil {
+			rm.logger.Error("Table rollbcak failed", fmt.Sprintf("Table %s, Error: %v", tableName, err))
+		}
+
+		rm.logger.Info(fmt.Sprintf("Successfully rolled back table %s", tableName))
+	}
+
+	//marking snapshots as rolled back to avoid recalling
+	snapshot.Status = "rolled_back"
+	if err := rm.saveSnapshot(snapshot); err != nil {
+		rm.logger.Error("Failed to update snapshot status", err.Error())
+		return fmt.Errorf("rollback completed but failed to update the snapshot, %v", err)
+	}
+	rm.logger.Info(fmt.Sprintf("Migration rollback completed Successfully.. %s", snapshotID))
+	return nil
+}
+
+// rolling back a specific table
+func (rm *RollBackManager) rollbackTable(tableName string, preState TableSnapshot, migratedData []map[string]interface{}) error {
+	if !preState.ExistedBefore {
+		//table did not exist before migration, so we need to drop it
+		return rm.dropTable(tableName)
+	} else {
+		//table existed before, so we need to remove only the migrated data
+		return rm.removeMigratedData(tableName, migratedData)
+	}
+}
+
+// dropping a table that did not exist before migration
+func (rm *RollBackManager) dropTable(tableName string) error {
+	//TODO:we will need database specific DROP Table command
+
+	rm.logger.Info(fmt.Sprintf("Dropping table %s that did not exist before migration", tableName))
+
+	// we are clearing the table instaed of dropping it,
+	//TODO: proper DROP table logic
+
+	return rm.clearTable(tableName)
+}
+
+// removing migrated data from a table
+func (rm *RollBackManager) removeMigratedData(tableName string, migratedData []map[string]interface{}) error {
+	if len(migratedData) == 0 {
+		return nil
+	}
+
+	rm.logger.Info(fmt.Sprintf("Removing %d migrated rows froom table %s", len(migratedData), tableName))
+
+	//TODO: delete operation using promary keys
+	//performing logging to what is to be deleted
+
+	for i, row := range migratedData {
+		if i < 5 { //logging fist 5 rows for verification
+			rm.logger.Info(fmt.Sprintf("Would delete row %v", row))
+		}
+	}
+	rm.logger.Info(fmt.Sprintf("Successfully removed %d rows from %s", len(migratedData), tableName))
+
+	return nil
+}
+
+// clearin all data from a table
+func (rm *RollBackManager) clearTable(tableName string) error {
+	rm.logger.Info(fmt.Sprintf("CLearing all data fro table %s", tableName))
+
+	//TODO: DELETE from Tablename
+	//we are just logginf the action
+
+	return nil
+}
