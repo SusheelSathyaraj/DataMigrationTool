@@ -128,3 +128,46 @@ func (rm *RollBackManager) saveSnapshot(snapshot *MigrationSnapshot) error {
 	}
 	return nil
 }
+
+// updating the snapshot with migrated data for rollback
+func (rm *RollBackManager) UpdateSnapshotWithMigratedData(snapshotID string, data []map[string]interface{}) error {
+	snapshot, err := rm.LoadSnapshot(snapshotID)
+	if err != nil {
+		return fmt.Errorf("failed to load snapshot, %v", err)
+	}
+
+	//group data by table
+	for _, row := range data {
+		if tableName, ok := row["_source_table"].(string); ok {
+			if snapshot.MigratedData[tableName] == nil {
+				snapshot.MigratedData[tableName] = make([]map[string]interface{}, 0)
+			}
+
+			//Storing the migrated row to potential rollbac
+			cleanRow := make(map[string]interface{})
+			for k, v := range row {
+				if k != "_source_table" {
+					cleanRow[k] = v
+				}
+			}
+			snapshot.MigratedData[tableName] = append(snapshot.MigratedData[tableName], cleanRow)
+		}
+	}
+	return rm.saveSnapshot(snapshot)
+}
+
+// loading the snapshot to the disc
+func (rm *RollBackManager) LoadSnapshot(snapshotID string) (*MigrationSnapshot, error) {
+	filename := filepath.Join(rm.snapshotsDir, snapshotID+".json")
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read snapshot file, %v", err)
+	}
+
+	var snapshot MigrationSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return nil, fmt.Errorf("failed to unmarhsal snapshot, %v", err)
+	}
+	return &snapshot, nil
+}
