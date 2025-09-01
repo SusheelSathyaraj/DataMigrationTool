@@ -1,8 +1,11 @@
 package migration
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/database"
@@ -16,7 +19,7 @@ type MigrationSnapshot struct {
 	SourceDB          string                              `json:"source_db"`
 	TargetDB          string                              `json:"target_db"`
 	Tables            []string                            `json:"tables"`
-	PreMigrationState map[string][]map[string]interface{} `json:"pre_migration_state"`
+	PreMigrationState map[string]TableSnapshot            `json:"pre_migration_state"`
 	MigratedData      map[string][]map[string]interface{} `json:"migrated_data"`
 	Status            string                              `json:"status"` //"in_progress", "completed", "failed", "rolled_back"
 }
@@ -50,4 +53,78 @@ func NewRollBackManager(targetClient database.DatabaseClient, logger *monitoring
 		snapshotsDir: snapshotsDir,
 		logger:       logger,
 	}
+}
+
+// creating a snapshot before migation
+func (rm *RollBackManager) CreateSnapshot(config MigrationConfig) (*MigrationSnapshot, error) {
+	snapshotID := fmt.Sprintf("migration_%s_to_%s_%d", config.SourceDb, config.TargetDb, time.Now().Unix())
+
+	rm.logger.Info(fmt.Sprintf("Creating migration snapshot, %s", snapshotID))
+
+	snapshot := &MigrationSnapshot{
+		ID:                snapshotID,
+		Timestamp:         time.Now(),
+		SourceDB:          config.SourceDb,
+		TargetDB:          config.TargetDb,
+		Tables:            config.Tables,
+		PreMigrationState: make(map[string]TableSnapshot),
+		MigratedData:      make(map[string][]map[string]interface{}),
+		Status:            "in_progress",
+	}
+
+	//capturing pre-migration state for each tble
+	for _, table := range config.Tables {
+		tableSnapshot, err := rm.captureTableState(table)
+		if err != nil {
+			rm.logger.Error("Failed to capture table state", fmt.Sprintf("Table: %s, Error: %v", table, err))
+			//continue with othe tables  instead of failing completely
+			tableSnapshot = TableSnapshot{
+				TableName:     table,
+				RowCount:      0,
+				ExistedBefore: false,
+			}
+		}
+		snapshot.PreMigrationState[table] = tableSnapshot
+	}
+	//saving snapshot to tthe disk
+	if err := rm.saveSnapshot(snapshot); err != nil {
+		return nil, fmt.Errorf("failed to save snapshot, %v", err)
+	}
+	rm.logger.Info(fmt.Sprintf("Migration snapshot created Successfully, %s", snapshotID))
+	return snapshot, nil
+}
+
+// capturing the current state of the table
+func (rm *RollBackManager) captureTableState(tableName string) (TableSnapshot, error) {
+	//fetching existing data to check if table exists and get row count
+	existingData, err := rm.targetClient.FetchAllData([]string{tableName})
+
+	if err != nil {
+		//table might not exist, which is fine for fresh migration
+		return TableSnapshot{
+			TableName:     tableName,
+			RowCount:      0,
+			ExistedBefore: false,
+		}, nil
+	}
+
+	return TableSnapshot{
+		TableName:     tableName,
+		RowCount:      int64(len(existingData)),
+		ExistedBefore: true,
+	}, nil
+}
+
+// saving a snapshot to the disc
+func (rm *RollBackManager) saveSnapshot(snapshot *MigrationSnapshot) error {
+	fileName := filepath.Join(rm.snapshotsDir, snapshot.ID+".json")
+
+	data, err := json.MarshalIndent(snapshot, "", " ")
+	if err != nil {
+		return fmt.Errorf("failed to Marshal snapshot, %v", err)
+	}
+	if err := os.WriteFile(fileName, data, 0644); err != nil {
+		return fmt.Errorf("failed to write snapshot file, %v", err)
+	}
+	return nil
 }
