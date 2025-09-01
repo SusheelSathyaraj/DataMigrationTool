@@ -8,6 +8,27 @@ set -e
 echo "Starting Data Migration Tool Test Suite"
 echo "======================================="
 
+# Function to run tests with timing
+run_test_with_timing() {
+    local test_name="$1"
+    local test_command="$2"
+    
+    print_status "Running $test_name..."
+    start_time=$(date +%s)
+    
+    if eval "$test_command"; then
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        print_status "$test_name completed in ${duration}s"
+        return 0
+    else
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        print_status "$test_name failed after ${duration}s"
+        return 1
+    fi
+}
+
 #Check if Go is installed
 if ! command -v go &> /dev/null; then
     print_status "Go is not installed. Please install go and try again"
