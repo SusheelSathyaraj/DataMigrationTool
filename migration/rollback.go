@@ -280,3 +280,57 @@ func (rm *RollBackManager) clearTable(tableName string) error {
 
 	return nil
 }
+
+// returns a list of all snapshots available
+func (rm *RollBackManager) ListSnapshots() ([]MigrationSnapshot, error) {
+	files, err := filepath.Glob(filepath.Join(rm.snapshotsDir, "*.json"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list the snapshots, %v", err)
+	}
+
+	var snapshots []MigrationSnapshot
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			log.Printf("Warning:Could not read snapshot file %s, %v", file, err)
+			continue
+		}
+		var snaphot MigrationSnapshot
+		if err := json.Unmarshal(data, &snaphot); err != nil {
+			log.Printf("Warning:Could not parse snapshot file %s, %v", file, err)
+			continue
+		}
+
+		snapshots = append(snapshots, snaphot)
+	}
+	return snapshots, nil
+}
+
+// removing snapshots that are older than the specified period
+func (rm *RollBackManager) CleanupOldSnapshots(maxDuration time.Duration) error {
+	snapshots, err := rm.ListSnapshots()
+	if err != nil {
+		return err
+	}
+	cutoffTime := time.Now().Add(-maxDuration)
+	cleaned := 0
+
+	for _, snapshot := range snapshots {
+		if snapshot.Timestamp.Before(cutoffTime) && (snapshot.Status == "completed" || snapshot.Status == "rolled-back") {
+			filename := filepath.Join(rm.snapshotsDir, snapshot.ID+".json")
+			if err := os.Remove(filename); err != nil {
+				log.Printf("Warning: Could not remove all snapshots %s, %v", filename, err)
+			} else {
+				cleaned++
+				rm.logger.Info(fmt.Sprintf("Cleaned up old snapshots %s", snapshot.ID))
+			}
+		}
+	}
+	rm.logger.Info(fmt.Sprintf("Cleaned up %d old snapshots", cleaned))
+	return nil
+}
+
+// Returning detailed information about a snapshot
+func (rm *RollBackManager) GetSnapshotInfo(snapshotID string) (*MigrationSnapshot, error) {
+	return rm.LoadSnapshot(snapshotID)
+}
