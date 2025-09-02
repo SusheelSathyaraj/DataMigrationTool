@@ -41,6 +41,8 @@ type MigrationEngine struct {
 	Validator       *validation.MigrationVaildator
 	ProgressTracker *monitoring.ProcessTracker
 	Logger          *monitoring.MigrationLogger
+	RollBackManager *RollBackManager
+	CurrentSnapshot *MigrationSnapshot
 }
 
 // Results of the migration
@@ -61,6 +63,7 @@ func NewMigrationEngine(config MigrationConfig, source, target database.Database
 	//initialising with estimated row count(will be updated during validation)
 	progressTracker := monitoring.NewProgressTracker(0, len(config.Tables))
 	logger := monitoring.NewMigrationLogger()
+	rollbackManager := NewRollBackManager(target, logger)
 
 	return &MigrationEngine{
 		Config:          config,
@@ -69,6 +72,7 @@ func NewMigrationEngine(config MigrationConfig, source, target database.Database
 		Validator:       validation.NewMigrationValidator(source, target),
 		ProgressTracker: progressTracker,
 		Logger:          logger,
+		RollBackManager: rollbackManager,
 	}
 }
 
@@ -84,12 +88,27 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	me.Logger.Info(fmt.Sprintf("Starting %s migration from %s to %s", me.Config.Mode, me.Config.SourceDb, me.Config.TargetDb))
 	log.Printf("Starting %s migation from %s to %s", me.Config.Mode, me.Config.SourceDb, me.Config.TargetDb)
 
+	//Step0: Create rollback snapshot if backup is enabled
+	if me.Config.CreateBackup {
+		me.Logger.Info("Creating rollback snapshot")
+		snapshot, err := me.RollBackManager.CreateSnapshot(me.Config)
+		if err != nil {
+			me.Logger.Error("Failed to create rollback snapshot", err.Error())
+			return result, fmt.Errorf("failed to create roll back snapshot, %v", err)
+		}
+		me.CurrentSnapshot = snapshot
+		me.Logger.Info(fmt.Sprintf("Rollback snapshot created, %s", snapshot.ID))
+	}
+
 	//Step1: Premigration  validation
 	if me.Config.ValidateData {
 		me.Logger.Info("Starting Pre-Migration Validation")
 		preValidation, err := me.Validator.PreMigrationValidation(me.Config.Tables)
 		if err != nil {
 			me.Logger.Error("Pre-Migration Validation failed", err.Error())
+			if me.CurrentSnapshot != nil {
+				me.RollBackManager.MarkSnapshotFailed(me.CurrentSnapshot.ID)
+			}
 			return result, fmt.Errorf("pre-migration validation failed, %v", err)
 		}
 		result.PreValidation = preValidation
@@ -107,6 +126,9 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 		//checking for any failed tables validation
 		if preValidationSummary.InvalidTables > 0 {
 			me.Logger.Error("Pre-Migration Validation failed", fmt.Sprintf("%d tables failed validation", preValidationSummary.InvalidTables))
+			if me.CurrentSnapshot != nil {
+				me.RollBackManager.MarkSnapshotFailed(me.CurrentSnapshot.ID)
+			}
 			return result, fmt.Errorf("pre-migration validation failed for %d tables", preValidationSummary.InvalidTables)
 		}
 		me.Logger.Info(fmt.Sprintf("Pre-Migration Validation Completed Successfully - %d rows across %d tables", totalRows, len(me.Config.Tables)))
@@ -136,6 +158,11 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 	if migrationErr != nil {
 		me.Logger.Error("Migration Failed", migrationErr.Error())
 		result.Errors = append(result.Errors, migrationErr.Error())
+
+		//marking snapshot as failed
+		if me.CurrentSnapshot != nil {
+			me.RollBackManager.MarkSnapshotFailed(me.CurrentSnapshot.ID)
+		}
 		return result, migrationErr
 	}
 
@@ -146,6 +173,15 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 		if err != nil {
 			me.Logger.Error("Post-Migration VAlidation error", err.Error())
 			result.Errors = append(result.Errors, fmt.Sprintf("post migration validation error , %v", err))
+
+			//marking snapshot as failed and attempting rollback
+			if me.CurrentSnapshot != nil {
+				me.RollBackManager.MarkSnapshotFailed(me.CurrentSnapshot.ID)
+				me.Logger.Info("Attempting automatic rollback due to vaildation failure")
+				if rollbackErr := me.RollBackManager.RollBackMigration(me.CurrentSnapshot.ID); rollbackErr != nil {
+					me.Logger.Error("Automatic rollback failed", rollbackErr.Error())
+				}
+			}
 			return result, fmt.Errorf("post Migration Validation Failed, %v", err)
 		}
 		result.PostValidation = postValidation
@@ -157,12 +193,28 @@ func (me *MigrationEngine) ExecuteMigration() (*MigrationResult, error) {
 		if postValidationSummary.InvalidTables > 0 {
 			me.Logger.Error("Migration Validation failed", fmt.Sprintf("%d tables failed post migration validation", postValidationSummary.InvalidTables))
 			result.Success = false
+
+			//attempting automatic rollback
+			if me.CurrentSnapshot != nil {
+				me.RollBackManager.MarkSnapshotFailed(me.CurrentSnapshot.ID)
+				me.Logger.Info("Attempting automatic rollbackdue to validation failure")
+				if rollbackErr := me.RollBackManager.RollBackMigration(me.CurrentSnapshot.ID); rollbackErr != nil {
+					me.Logger.Error("Automatic rollback failed", rollbackErr.Error())
+				}
+			}
 			return result, fmt.Errorf("migration validation failed for %d tables", postValidationSummary.InvalidTables)
 		}
 		me.Logger.Info("Post-Migration VAlidation completed Successfully")
 	}
 
-	//Step4: Finalize result
+	//Step4: Mark snapshot as completed
+	if me.CurrentSnapshot != nil {
+		if err := me.RollBackManager.MarkSnapshotCompleted(me.CurrentSnapshot.ID); err != nil {
+			me.Logger.Error("Failed to mark snapshot as completed", err.Error())
+		}
+	}
+
+	//Step5: Finalize result
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(result.StartTime)
 	result.Success = true
@@ -233,6 +285,14 @@ func (me *MigrationEngine) executeFullMigration(result *MigrationResult) error {
 			me.Logger.Error("Table Import Failed", errorMsg)
 			me.ProgressTracker.AddError(errorMsg)
 			return fmt.Errorf(errorMsg)
+		}
+
+		//updating rollback snapshot with migrated data
+		if me.CurrentSnapshot != nil {
+			if err := me.RollBackManager.UpdateSnapshotWithMigratedData(me.CurrentSnapshot.ID, tableData); err != nil {
+				me.Logger.Error("Failed to update rollback snapshot", err.Error())
+				//continue migration but log the error
+			}
 		}
 
 		me.ProgressTracker.CompletedTable()
