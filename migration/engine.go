@@ -347,18 +347,6 @@ func (mr *MigrationResult) Print() {
 	fmt.Println("===============")
 }
 
-// Rollback for a failed migration (placeholder)
-func (me *MigrationEngine) RollbackMigration() error {
-	log.Println("Attempting migration rollback...")
-
-	//TODO: implement rollback logic
-	//1.identify what was migrated
-	//2.removing migrated data from target
-	//restore from backup if available
-
-	return fmt.Errorf("rollback functionality not implemented")
-}
-
 // importing data with detail batch progress trackking
 func (me *MigrationEngine) importDataWithBatchTracking(data []map[string]interface{}, batchTracker *monitoring.BatchTracker) error {
 	batchSize := me.Config.BatchSize
