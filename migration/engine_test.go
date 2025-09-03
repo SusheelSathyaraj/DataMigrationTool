@@ -8,26 +8,65 @@ import (
 )
 
 // struct for testing migration engine
-type MockDatabaseClient struct {
-	mockData     map[string][]map[string]interface{}
-	failOnFetch  string
-	failOnImport bool
-	importedData []map[string]interface{}
-	fetchCalled  int
-	importCalled int
+type CompleteMockDatabaseClient struct {
+	name         string
+	connected    bool
+	data         map[string][]map[string]interface{}
+	importedData map[string][]map[string]interface{}
+
+	failOnConnect bool
+	failOnFetch   string
+	failOnImport  bool
+	fetchDelay    time.Duration
+	importDelay   time.Duration
+
+	connectCalled int
+	closeCalled   int
+	fetchCalled   int
+	importCalled  int
+	queryCalled   int
 }
 
-func NewMockDatabaseClient() *MockDatabaseClient {
-	return &MockDatabaseClient{
-		mockData:     make(map[string][]map[string]interface{}),
-		importedData: make([]map[string]interface{}, 0),
+func NewCompleteCompleteMockDatabaseClient(name string) *CompleteMockDatabaseClient {
+	return &CompleteMockDatabaseClient{
+		name:         name,
+		data:         make(map[string][]map[string]interface{}),
+		importedData: make(map[string][]map[string]interface{}, 0),
+		fetchDelay:   0,
+		importDelay:  0,
 	}
 }
 
-func (m *MockDatabaseClient) Connect() error                               { return nil }
-func (m *MockDatabaseClient) Close() error                                 { return nil }
-func (m *MockDatabaseClient) ExecuteQuery(query string) (*sql.Rows, error) { return nil, nil }
-func (m *MockDatabaseClient) FetchAllData(tables []string) ([]map[string]interface{}, error) {
+func (m *CompleteMockDatabaseClient) Connect() error {
+	m.connectCalled++
+	if m.failOnConnect {
+		return fmt.Errorf("mock connection failure for %s", m.name)
+	}
+	//simulating connection time
+	if m.fetchDelay > 0 {
+		time.Sleep(m.fetchDelay)
+	}
+	m.connected = true
+	return nil
+}
+
+func (m *CompleteMockDatabaseClient) Close() error {
+	m.closeCalled++
+	m.connected = false
+	return nil
+}
+
+func (m *CompleteMockDatabaseClient) ExecuteQuery(query string) (*sql.Rows, error) {
+	m.queryCalled++
+
+	if !m.connected {
+		return nil, fmt.Errorf("database %s not connected", m.name)
+	}
+	//this would be *sql.rows in real world scenario
+	return nil, nil
+}
+
+func (m *CompleteMockDatabaseClient) FetchAllData(tables []string) ([]map[string]interface{}, error) {
 	m.fetchCalled++
 
 	if m.failOnFetch != "" {
@@ -38,55 +77,101 @@ func (m *MockDatabaseClient) FetchAllData(tables []string) ([]map[string]interfa
 		}
 	}
 
+	//simulate fetch delay
+	if m.fetchDelay > 0 {
+		time.Sleep(m.fetchDelay)
+	}
+
 	var allData []map[string]interface{}
 	for _, table := range tables {
-		if data, exists := m.mockData[table]; exists {
+		if data, exists := m.data[table]; exists {
 			for _, row := range data {
-				row["_source_table"] = table
-				allData = append(allData, row)
+				//creating a copy of to avoid modifying original data
+				rowCopy := make(map[string]interface{})
+				for k, v := range row {
+					rowCopy[k] = v
+				}
+				rowCopy["_source_table"] = table
+				allData = append(allData, rowCopy)
 			}
 		}
 	}
 	return allData, nil
 }
 
-func (m *MockDatabaseClient) FetchAllDataConcurrently(tables []string, numWorkers int) ([]map[string]interface{}, error) {
-	return m.FetchAllData(tables)
+func (m *CompleteMockDatabaseClient) FetchAllDataConcurrently(tables []string, numWorkers int) ([]map[string]interface{}, error) {
+	//simulating concurrent processing with slight delay
+	originalDelay := m.fetchDelay
+	if m.fetchDelay > 0 {
+		m.fetchDelay = m.fetchDelay / 2 //simulating speedup from concurrency
+	}
+
+	result, err := m.FetchAllData(tables)
+	m.fetchDelay = originalDelay //restore original delay
+	return result, err
 }
 
-func (m *MockDatabaseClient) ImportData(data []map[string]interface{}) error {
+func (m *CompleteMockDatabaseClient) ImportData(data []map[string]interface{}) error {
 	m.importCalled++
 
-	if m.failOnImport {
-		return fmt.Errorf("mock import err failed")
+	if !m.connected {
+		return fmt.Errorf("database %s not connected", m.name)
 	}
-	m.importedData = append(m.importedData, data...)
+
+	if m.failOnImport {
+		return fmt.Errorf("mock import err failed for %s", m.name)
+	}
+
+	//simulating import delay
+	if m.importDelay > 0 {
+		time.Sleep(m.importDelay)
+	}
+
+	for _, row := range data {
+		if tableNameInterface, exists := row["_source_table"]; exists {
+			tableName := tableNameInterface.(string)
+
+			if m.importedData[tableName] == nil {
+				m.importedData[tableName] = make([]map[string]interface{}, 0)
+			}
+
+			//storing  clean row without metadata
+			cleanRow := make(map[string]interface{})
+			for k, v := range row {
+				if k != "_source_table" {
+					cleanRow[k] = v
+				}
+			}
+			m.importedData[tableName] = append(m.importedData[tableName], cleanRow)
+		}
+	}
+
 	return nil
 }
 
-func (m *MockDatabaseClient) ImportDataConcurrently(data []map[string]interface{}, batchSize int) error {
+func (m *CompleteMockDatabaseClient) ImportDataConcurrently(data []map[string]interface{}, batchSize int) error {
 	return m.ImportData(data)
 }
 
-func (m *MockDatabaseClient) AddMockData(table string, data []map[string]interface{}) {
+func (m *CompleteMockDatabaseClient) AddMockData(table string, data []map[string]interface{}) {
 	m.mockData[table] = data
 }
 
-func (m *MockDatabaseClient) SetFailOnFetch(table string) {
+func (m *CompleteMockDatabaseClient) SetFailOnFetch(table string) {
 	m.failOnFetch = table
 }
 
-func (m MockDatabaseClient) SetFailOnImport(fail bool) {
+func (m CompleteMockDatabaseClient) SetFailOnImport(fail bool) {
 	m.failOnImport = fail
 }
 
-func (m *MockDatabaseClient) GetImportedData() []map[string]interface{} {
+func (m *CompleteMockDatabaseClient) GetImportedData() []map[string]interface{} {
 	return m.importedData
 }
 
 func TestMigrationEngineFullMigration(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetClient := NewCompleteMockDatabaseClient()
 
 	//Adding test data
 	testData := []map[string]interface{}{
@@ -139,8 +224,8 @@ func TestMigrationEngineFullMigration(t *testing.T) {
 }
 
 func TestMigrationEngineWithFetchError(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targerClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targerClient := NewCompleteMockDatabaseClient()
 
 	//setting source to fail on fetch
 	sourceClient.SetFailOnFetch("users")
@@ -174,8 +259,8 @@ func TestMigrationEngineWithFetchError(t *testing.T) {
 }
 
 func TestMigrationEngineWithImportError(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetClient := NewCompleteMockDatabaseClient()
 
 	testData := []map[string]interface{}{
 		{"id": 1, "name": "Susheel", "age": 30},
@@ -206,8 +291,8 @@ func TestMigrationEngineWithImportError(t *testing.T) {
 }
 
 func TestMigrationEngineMultipleTables(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetClient := NewCompleteMockDatabaseClient()
 
 	//add data for multiple tables
 	usersData := []map[string]interface{}{
@@ -261,8 +346,8 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 }
 
 func TestMigrationEngineWithConcurrentProcessing(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetClient := NewCompleteMockDatabaseClient()
 
 	testData := []map[string]interface{}{
 		{"id": 1, "name": "Susheel"},
@@ -300,8 +385,8 @@ func TestMigrationEngineWithConcurrentProcessing(t *testing.T) {
 }
 
 func TestMigrationEngineIncrementalMode(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetCleint := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetCleint := NewCompleteMockDatabaseClient()
 
 	config := MigrationConfig{
 		Mode:         IncrementalMigration,
@@ -324,8 +409,8 @@ func TestMigrationEngineIncrementalMode(t *testing.T) {
 }
 
 func TestMigrationEngineScheduledMode(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	targetClient := NewCompleteMockDatabaseClient()
 
 	config := MigrationConfig{
 		Mode:         ScheduledMigration,
@@ -391,8 +476,8 @@ func TestMigrationConfigValidation(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			sourceClient := NewMockDatabaseClient()
-			targetCLient := NewMockDatabaseClient()
+			sourceClient := NewCompleteMockDatabaseClient()
+			targetCLient := NewCompleteMockDatabaseClient()
 
 			if tc.config.Mode == FullMigration {
 				//testdata for valid cases
@@ -414,8 +499,8 @@ func TestMigrationConfigValidation(t *testing.T) {
 }
 
 func BenchmarkMigrationEngineFull(b *testing.B) {
-	sourceClient := NewMockDatabaseClient()
-	//	targetClient := NewMockDatabaseClient()
+	sourceClient := NewCompleteMockDatabaseClient()
+	//	targetClient := NewCompleteMockDatabaseClient()
 
 	//adding large test dataset
 	var testData []map[string]interface{}
@@ -438,7 +523,7 @@ func BenchmarkMigrationEngineFull(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		//resetting target client for each iteration
-		targetClient := NewMockDatabaseClient()
+		targetClient := NewCompleteMockDatabaseClient()
 		engine := NewMigrationEngine(config, sourceClient, targetClient)
 		_, err := engine.ExecuteMigration()
 		if err != nil {
