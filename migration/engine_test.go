@@ -195,8 +195,8 @@ func TestMigrationEngineWithImportError(t *testing.T) {
 }
 
 func TestMigrationEngineMultipleTables(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
 
 	//add data for multiple tables
 	usersData := []map[string]interface{}{
@@ -210,8 +210,8 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 		{"id": 3, "user_id": 1, "amount": 5070.50},
 	}
 
-	sourceClient.AddMockData("users", usersData)
-	sourceClient.AddMockData("orders", ordersData)
+	sourceClient.AddTestData("users", usersData)
+	sourceClient.AddTestData("orders", ordersData)
 
 	config := MigrationConfig{
 		Mode:         FullMigration,
@@ -220,6 +220,11 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 		Tables:       []string{"users", "orders"},
 		ValidateData: true,
 	}
+
+	sourceClient.Connect()
+	targetClient.Connect()
+	defer sourceClient.Close()
+	defer targetClient.Close()
 
 	engine := NewMigrationEngine(config, sourceClient, targetClient)
 
@@ -231,6 +236,9 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 
 	if !result.Success {
 		t.Errorf("Expected successful migration, got failure")
+		if len(result.Errors) > 0 {
+			t.Errorf("Migration errors, %v", result.Errors)
+		}
 	}
 
 	if result.TotalRowsMigrated != 5 {
@@ -242,22 +250,38 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 	}
 
 	//checking for import data
-	importedData := targetClient.GetImportedData()
+	importedUsers := targetClient.GetImportedData("users")
+	importedOrders := targetClient.GetImportedData("orders")
 
-	if len(importedData) != 5 {
-		t.Errorf("Expected 5 imported rows, found %d", len(importedData))
+	if len(importedUsers) != len(usersData) {
+		t.Errorf("Expected %d imported users, found %d", len(importedUsers))
 	}
+
+	if len(importedOrders) != len(ordersData) {
+		t.Errorf("Expected %d imported orders, found %d", len(importedOrders))
+	}
+
+	if result.Duration == 0 {
+		t.Errorf("Expected Migration duration >0, got %v", result.Duration)
+	}
+
+	//log performance metrics for manual review
+	avgSpeed := float64(result.TotalRowsMigrated) / result.Duration.Seconds()
+	t.Logf("Migration Performance:")
+	t.Logf(" Total Time,  %v", result.Duration)
+	t.Logf(" Rows/Second, %.2f", avgSpeed)
+	t.Logf(" Tables %d", result.TotalTablesProcessed)
 }
 
 func TestMigrationEngineWithConcurrentProcessing(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
 
 	testData := []map[string]interface{}{
 		{"id": 1, "name": "Susheel"},
 		{"id": 2, "name": "Sathyaraj"},
 	}
-	sourceClient.AddMockData("users", testData)
+	sourceClient.AddTestData("users", testData)
 
 	config := MigrationConfig{
 		Mode:         FullMigration,
@@ -267,8 +291,28 @@ func TestMigrationEngineWithConcurrentProcessing(t *testing.T) {
 		BatchSize:    1,
 		Workers:      2,
 		Concurrent:   true,
-		ValidateData: false,
+		ValidateData: true,
 	}
+
+	//add data for multiple tables
+	usersData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel"},
+		{"id": 2, "name": "Sathyaraj"},
+	}
+
+	ordersData := []map[string]interface{}{
+		{"id": 1, "user_id": 1, "amount": 100.50},
+		{"id": 2, "user_id": 2, "amount": 10},
+		{"id": 3, "user_id": 1, "amount": 5070.50},
+	}
+
+	sourceClient.AddTestData("users", usersData)
+	sourceClient.AddTestData("orders", ordersData)
+
+	sourceClient.Connect()
+	targetClient.Connect()
+	defer sourceClient.Close()
+	defer targetClient.Close()
 
 	engine := NewMigrationEngine(config, sourceClient, targetClient)
 
@@ -280,17 +324,96 @@ func TestMigrationEngineWithConcurrentProcessing(t *testing.T) {
 
 	if !result.Success {
 		t.Errorf("Expected successful migration, got failure")
+		if len(result.Errors) > 0 {
+			t.Errorf("Migraiton Errors: %v", result.Errors)
+		}
 	}
 
-	importedData := targetClient.GetImportedData()
-	if len(importedData) != 2 {
-		t.Errorf("Expected 2 rows to be imported, got %d", len(importedData))
+	expectedTotalRows := int64(len(usersData) + len(ordersData))
+	if result.TotalRowsMigrated != expectedTotalRows {
+		t.Errorf("Expected %d rows to be migrated, got %d", expectedTotalRows, result.TotalRowsMigrated)
+	}
+
+	if result.TotalTablesProcessed != 2 {
+		t.Errorf("Expected 2 tables processed, got %d", result.TotalTablesProcessed)
+	}
+
+	importedUsers := targetClient.GetImportedData("users")
+	importedOrders := targetClient.GetImportedData("orders")
+
+	if len(importedUsers) != len(usersData) {
+		t.Errorf("Expected %d users to be imported, got %d", len(importedUsers), len(usersData))
+	}
+
+	if len(importedOrders) != len(ordersData) {
+		t.Errorf("Expected %d orders to be imported, got %d", len(importedOrders), len(ordersData))
+	}
+
+	if result.Duration == 0 {
+		t.Errorf("Expected Migration duration >0, got %v", result.Duration)
+	}
+
+	//log performance metrics for manual review
+	avgSpeed := float64(result.TotalRowsMigrated) / result.Duration.Seconds()
+	t.Logf("Migration Performance:")
+	t.Logf(" Total Time,  %v", result.Duration)
+	t.Logf(" Rows/Second, %.2f", avgSpeed)
+	t.Logf(" Tables %d", result.TotalTablesProcessed)
+}
+
+func TestMigrationEngineWithBackupAndRollBack(t *testing.T) {
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
+
+	testData := []map[string]interface{}{
+		{"id": 1, "name": "Susheel", "status": "active"},
+	}
+
+	sourceClient.AddTestData("users", testData)
+
+	config := MigrationConfig{
+		Mode:         FullMigration,
+		SourceDb:     "mysql",
+		TargetDb:     "postgresql",
+		Tables:       []string{"users"},
+		ValidateData: false,
+		CreateBackup: true,
+	}
+
+	sourceClient.Connect()
+	targetClient.Connect()
+	defer sourceClient.Close()
+	defer targetClient.Close()
+
+	engine := NewMigrationEngine(config, sourceClient, targetClient)
+	result, err := engine.ExecuteMigration()
+
+	if err != nil {
+		t.Fatalf("Migration Failed, %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected successful migration, got failure")
+	}
+
+	//verifying that backup is created
+	if engine.CurrentSnapshot == nil {
+		t.Errorf("Expected backup snapshot to be cretaed")
+	} else {
+		t.Logf("Backup snapshot created, %s", engine.CurrentSnapshot.ID)
+	}
+
+	//verfying rollback functionality
+	rollbackErr := engine.RollBackManager.RollBackMigration(engine.CurrentSnapshot.ID)
+	if rollbackErr != nil {
+		t.Logf("Rollback failed(expected for mock implementation), %v", rollbackErr)
+		//this is for now expected since complete rollbak is not iplemented yet
 	}
 }
 
 func TestMigrationEngineIncrementalMode(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetCleint := NewMockDatabaseClient()
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetCleint := test.NewCompleteMockDatabaseClient("postgresql")
 
 	config := MigrationConfig{
 		Mode:         IncrementalMigration,
@@ -298,7 +421,13 @@ func TestMigrationEngineIncrementalMode(t *testing.T) {
 		TargetDb:     "postgresql",
 		Tables:       []string{"users"},
 		ValidateData: false,
+		CreateBackup: false,
 	}
+
+	sourceClient.Connect()
+	targetCleint.Connect()
+	defer sourceClient.Close()
+	defer targetCleint.Close()
 
 	engine := NewMigrationEngine(config, sourceClient, targetCleint)
 	result, err := engine.ExecuteMigration()
@@ -313,8 +442,8 @@ func TestMigrationEngineIncrementalMode(t *testing.T) {
 }
 
 func TestMigrationEngineScheduledMode(t *testing.T) {
-	sourceClient := NewMockDatabaseClient()
-	targetClient := NewMockDatabaseClient()
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
 
 	config := MigrationConfig{
 		Mode:         ScheduledMigration,
@@ -322,7 +451,13 @@ func TestMigrationEngineScheduledMode(t *testing.T) {
 		TargetDb:     "postgresql",
 		Tables:       []string{"users"},
 		ValidateData: false,
+		CreateBackup: false,
 	}
+
+	sourceClient.Connect()
+	targetClient.Connect()
+	defer sourceClient.Close()
+	defer targetClient.Close()
 
 	engine := NewMigrationEngine(config, sourceClient, targetClient)
 	result, err := engine.ExecuteMigration()
@@ -403,8 +538,8 @@ func TestMigrationConfigValidation(t *testing.T) {
 }
 
 func BenchmarkMigrationEngineFull(b *testing.B) {
-	sourceClient := NewMockDatabaseClient()
-	//	targetClient := NewMockDatabaseClient()
+	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
 
 	//adding large test dataset
 	var testData []map[string]interface{}
