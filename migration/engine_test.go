@@ -546,7 +546,7 @@ func BenchmarkMigrationEngineFull(b *testing.B) {
 		testData = append(testData, map[string]interface{}{
 			"id":     i,
 			"name":   fmt.Sprintf("User%d", i),
-			"email":  fmt.Sprintf("user%d@example.com"),
+			"email":  fmt.Sprintf("user%d@example.com", i),
 			"age":    25 + (i % 50),
 			"status": "active",
 			"score":  float64(i * 10),
