@@ -515,15 +515,15 @@ func TestMigrationConfigValidation(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			sourceClient := NewMockDatabaseClient()
-			targetCLient := NewMockDatabaseClient()
+			sourceClient := test.NewCompleteMockDatabaseClient("mysql")
+			targetCLient := test.NewCompleteMockDatabaseClient("postgresql")
 
 			if tc.config.Mode == FullMigration {
 				//testdata for valid cases
 				testData := []map[string]interface{}{
 					{"id": 1, "name": "Susheel"},
 				}
-				sourceClient.AddMockData("users", testData)
+				sourceClient.AddTestData("users", testData)
 			}
 			engine := NewMigrationEngine(tc.config, sourceClient, targetCLient)
 			_, err := engine.ExecuteMigration()
@@ -539,32 +539,49 @@ func TestMigrationConfigValidation(t *testing.T) {
 
 func BenchmarkMigrationEngineFull(b *testing.B) {
 	sourceClient := test.NewCompleteMockDatabaseClient("mysql")
-	targetClient := test.NewCompleteMockDatabaseClient("postgresql")
 
 	//adding large test dataset
 	var testData []map[string]interface{}
 	for i := 0; i < 1000; i++ {
 		testData = append(testData, map[string]interface{}{
-			"id":   i,
-			"name": fmt.Sprintf("User%d", i),
-			"age":  25 + (i % 50),
+			"id":     i,
+			"name":   fmt.Sprintf("User%d", i),
+			"email":  fmt.Sprintf("user%d@example.com"),
+			"age":    25 + (i % 50),
+			"status": "active",
+			"score":  float64(i * 10),
+			"active": i%2 == 0,
 		})
 	}
-	sourceClient.AddMockData("users", testData)
+
+	sourceClient.AddTestData("users", testData)
+
 	config := MigrationConfig{
 		Mode:         FullMigration,
 		SourceDb:     "mysql",
 		TargetDb:     "postgresql",
 		Tables:       []string{"users"},
+		Workers:      4,
+		BatchSize:    100,
+		Concurrent:   true,
 		ValidateData: false, //disabling as it is benchmark
+		CreateBackup: false, //disabing as it is benchmark
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		//resetting target client for each iteration
-		targetClient := NewMockDatabaseClient()
+		targetClient := test.NewCompleteMockDatabaseClient("postgresql")
+
+		sourceClient.Connect()
+		targetClient.Connect()
+
 		engine := NewMigrationEngine(config, sourceClient, targetClient)
 		_, err := engine.ExecuteMigration()
+
+		sourceClient.Close()
+		targetClient.Close()
+
 		if err != nil {
 			b.Fatal(err)
 		}
