@@ -254,11 +254,11 @@ func TestMigrationEngineMultipleTables(t *testing.T) {
 	importedOrders := targetClient.GetImportedData("orders")
 
 	if len(importedUsers) != len(usersData) {
-		t.Errorf("Expected %d imported users, found %d", len(importedUsers))
+		t.Errorf("Expected %d imported users, found %d", len(importedUsers), len(usersData))
 	}
 
 	if len(importedOrders) != len(ordersData) {
-		t.Errorf("Expected %d imported orders, found %d", len(importedOrders))
+		t.Errorf("Expected %d imported orders, found %d", len(importedOrders), len(ordersData))
 	}
 
 	if result.Duration == 0 {
