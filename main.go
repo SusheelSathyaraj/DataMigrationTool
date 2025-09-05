@@ -69,6 +69,21 @@ func printUsage() {
 	flag.PrintDefaults()
 }
 
+// creating appropriate database client based on type
+func createDatabaseClient(dbType string, cfg *config.Config) database.DatabaseClient {
+	switch strings.ToLower(dbType) {
+	case "mysql":
+		return database.NewMYSQLClientFromConfig(cfg)
+	case "postgresql":
+		return database.NewPostgreSQLClientFromConfig(cfg)
+	case "mongodb":
+		return database.NewMongoDBClientFromConfig(cfg)
+	default:
+		log.Fatalf("Unsupported database type, %s", dbType)
+		return nil
+	}
+}
+
 func main() {
 
 	//defining CLI for user input
@@ -135,7 +150,7 @@ func main() {
 		dummyConfig := migration.MigrationConfig{TargetDb: *targetDB}
 		engine := migration.NewMigrationEngine(dummyConfig, nil, targetClient)
 
-		if err := engine.RollbackbySnapshotID(*rollbackSnapshot); err != nil {
+		if err := engine.RollBackManager.RollBackMigration(*rollbackSnapshot); err != nil {
 			log.Fatalf("Rollback Failed %v", err)
 		}
 		fmt.Printf("Rollback completed successful for snapshot %s\n", *rollbackSnapshot)
@@ -148,7 +163,7 @@ func main() {
 		dummyConfig := migration.MigrationConfig{}
 		engine := migration.NewMigrationEngine(dummyConfig, nil, nil)
 
-		snapshots, err := engine.ListAvailableSnapshots()
+		snapshots, err := engine.RollBackManager.ListSnapshots()
 		if err != nil {
 			log.Fatalf("Failed to list snapshot, %v", err)
 		}
@@ -160,9 +175,9 @@ func main() {
 			fmt.Println("ID		| Date		| Source->Target		| Status	| Tables")
 			for _, snapshot := range snapshots {
 				fmt.Printf("%-28s | %-19s | %-15s | %-8s | %d\n",
-					&snapshot.ID[:28],
-					&snapshot.Timestamp.Format("2025-05-11 15:04:50"),
-					snapshot.SourceDB+"->"+&snapshot.TargetDB,
+					snapshot.ID[:28],
+					snapshot.Timestamp.Format("2025-05-11 15:04:50"),
+					snapshot.SourceDB+"->"+snapshot.TargetDB,
 					&snapshot.Status, len(snapshot.Tables))
 			}
 		}
@@ -179,7 +194,7 @@ func main() {
 		dummyConfig := migration.MigrationConfig{}
 		engime := migration.NewMigrationEngine(dummyConfig, nil, nil)
 
-		if err := engime.CleanupOldSnapshots(maxAge); err != nil {
+		if err := engime.RollBackManager.CleanupOldSnapshots(maxAge); err != nil {
 			log.Fatalf("Cleanup failed %v", err)
 		}
 		fmt.Printf("Cleanup completed for snapshots older than %s\n", maxAge)
@@ -188,60 +203,46 @@ func main() {
 
 	//validate input
 	if err := validateInput(*sourceDB, *targetDB, *mode); err != nil {
-		fmt.Println("Error:", err)
-		flag.Usage()
+		fmt.Println(" Validation Error: %v", err)
+		printUsage()
 		os.Exit(1)
 	}
+
 	fmt.Println("Input validated successfully")
 	fmt.Printf("Starting Migration from %s to %s in %s mode", *sourceDB, *targetDB, *mode)
+
+	if *dryRun {
+		fmt.Printf("DRY RUN MODE: No actual data will be migrated\n ")
+	}
 
 	if *concurrent {
 		fmt.Printf("Using concurrent processing with %d workers and batchsize %d", *workers, *batchsize)
 	}
 
-	//create source database client
-	fmt.Printf("\n Attempting to connect to %s database...", *sourceDB)
-
-	var sourceClient database.DatabaseClient
-
-	switch strings.ToLower(*sourceDB) {
-	case "mysql":
-		sourceClient = database.NewMYSQLClientFromConfig(cfg)
-	case "postgresql":
-		sourceClient = database.NewPostgreSQLClientFromConfig(cfg)
-	case "mongodb":
-		sourceClient = database.NewMongoDBClientFromConfig(cfg)
-	default:
-		log.Fatalf("Unsupported source database type, %s", *sourceDB)
+	if *backup {
+		fmt.Println("Rollback snapshots enabled")
 	}
+	fmt.Println()
+
+	//creating and connectinf source database client
+	fmt.Printf("Connecting to Source database %s...\n", *sourceDB)
+	sourceClient := createDatabaseClient(*sourceDB, cfg)
 
 	if err := sourceClient.Connect(); err != nil {
-		log.Fatalf("Failed to connect to %s Database, %v", *sourceDB, err)
+		log.Fatalf("Failed to connect to the source database, %v", err)
 	}
 	defer sourceClient.Close()
-	fmt.Printf("successfully connected to the source database %s", *sourceDB)
+	fmt.Printf("Successfully connected to the source database %s", *sourceDB)
 
-	// creating target database client
-	fmt.Printf("Connecting to  source database %s\n", *targetDB)
-	var targetClient database.DatabaseClient
-
-	switch strings.ToLower(*targetDB) {
-	case "mysql":
-		targetClient = database.NewMYSQLClientFromConfig(cfg)
-	case "postgresql":
-		targetClient = database.NewPostgreSQLClientFromConfig(cfg)
-	case "mongodb":
-		targetClient = database.NewMongoDBClientFromConfig(cfg)
-	default:
-		log.Fatalf("Unsupported source database type, %s", *targetDB)
-	}
+	//creating and connecting to the target database client
+	fmt.Printf("COnnecting to the  Target database %s...\n", *targetDB)
+	targetClient := createDatabaseClient(*targetDB, cfg)
 
 	if err := targetClient.Connect(); err != nil {
-		log.Fatalf("Failed to connect to the target database %s, %v", *targetDB, err)
+		log.Fatalf("Failed to connect to the target database, %v", err)
 	}
-
 	defer targetClient.Close()
-	fmt.Printf("successfully connected to the target database %s\n", *targetDB)
+	fmt.Printf("Successfully connected to the Target database %s", *targetDB)
 
 	//Parsing SQL file or discovering collections for mongodb
 	fmt.Println("Discovering tables and collections...")
@@ -254,10 +255,18 @@ func main() {
 		log.Fatalf("no tables or collections found in the file,%v", err)
 	}
 
+	entityType := "tables"
 	if strings.ToLower(*sourceDB) == "mongodb" {
-		fmt.Printf("Found %d collections : %v", len(tables), tables)
-	} else {
-		fmt.Printf("Found %d tables:: %v", len(tables), tables)
+		entityType = "collections"
+	}
+	fmt.Printf("Found %d %s, %v\n", len(tables), entityType, tables)
+
+	//exiting early when it is dry run after discovery
+	if *dryRun {
+		fmt.Println("\n Dry Run Complete \n")
+		fmt.Printf("Migrating %d %s from %s to %s \n", len(tables), entityType, *sourceDB, *targetDB)
+		fmt.Printf("Run without --dry-run to perform actual migration \n")
+		os.Exit(0)
 	}
 
 	//creating migration configuration
@@ -274,9 +283,14 @@ func main() {
 	}
 
 	//creating and executing migration
+	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+	fmt.Printf("STARTING THE MIGRATION PROCESS")
+	fmt.Printf(strings.Repeat("=", 60) + "\n")
+
 	migrationEngine := migration.NewMigrationEngine(migrationConfig, sourceClient, targetClient)
 
-	fmt.Println("\n===Starting Migration Process===")
+	startTime := time.Now()
+
 	result, err := migrationEngine.ExecuteMigration()
 	if err != nil {
 		log.Printf("Migration Failed, %v", err)
@@ -286,8 +300,11 @@ func main() {
 
 		//attempting rollback when failure occurs
 		fmt.Printf("Attempting to rollback migration...")
-		if rollbackErr := migrationEngine.RollbackMigration(); rollbackErr != nil {
+		if rollbackErr := migrationEngine.RollBackManager; rollbackErr != nil {
 			log.Printf("Rollback failed, %v", rollbackErr)
+			fmt.Printf("Try Manual Rollback: ./binary --rollback=<snapshot_id>\n")
+		} else {
+			fmt.Printf("Rollback completed successfully\n")
 		}
 		os.Exit(1)
 	}
@@ -360,21 +377,69 @@ func main() {
 		fmt.Println("Data Migration completed successfully !!!")
 	}
 	fmt.Println("Migration Process completed!!")
+
+	// Print success results
+	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+	fmt.Printf("🎉 MIGRATION COMPLETED SUCCESSFULLY!\n")
+	fmt.Printf(strings.Repeat("=", 60) + "\n")
+
+	result.Print()
+
+	// Success summary
+	totalTime := time.Since(startTime)
+	avgSpeed := float64(result.TotalRowsMigrated) / totalTime.Seconds()
+
+	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("   ⚡ Speed: %.0f rows/second\n", avgSpeed)
+	fmt.Printf("   📈 Throughput: %.0f rows/minute\n", avgSpeed*60)
+	fmt.Printf("   🏆 Efficiency: %.1f tables/minute\n", float64(result.TotalTablesProcessed)/totalTime.Minutes())
+
+	if result.TotalRowsMigrated > 100000 {
+		fmt.Printf("   🚀 High-volume migration completed!\n")
+	}
+
+	// Cleanup suggestions
+	if *backup {
+		fmt.Printf("\n💡 Management Commands:\n")
+		fmt.Printf("   📋 List snapshots: ./binary --list-snapshots\n")
+		fmt.Printf("   🧹 Cleanup old snapshots: ./binary --cleanup-snapshots=30d\n")
+	}
+
+	fmt.Printf("\n✨ Migration completed successfully in %v\n", totalTime)
+	fmt.Printf("🎯 Ready for production use!\n")
 }
 
-// helper function for handling mongodb parsing logic
+// helper function for handling mongodb parsing logic and SQL table discovery
 func getTablesOrCollections(sourceDB string, cfg *config.Config, sourceClient database.DatabaseClient) ([]string, error) {
 	switch strings.ToLower(sourceDB) {
 	case "mongodb":
 		//for mongodb, discover collections from database
 		if mongoClient, ok := sourceClient.(*database.MongoDBClient); ok {
-			return mongoClient.GetCollectionNames()
+			collections, err := mongoClient.GetCollectionNames()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get MongoDB collections, %v", err)
+			}
+			if len(collections) == 0 {
+				return nil, fmt.Errorf("no collections found in mongodb database")
+			}
+			return collections, nil
 		}
 		return nil, fmt.Errorf("failed to cast to MongoDB client")
 	case "mysql", "postgresql":
 		//for sql databases, parse SQL files
+		if cfg.SQLFilePath == "" {
+			return nil, fmt.Errorf("SQL file path not specified in the configuration")
+		}
 		parser := &database.SQLParser{}
-		return parser.ParseSQLFiles(cfg.SQLFilePath)
+		tables, err := parser.ParseSQLFiles(cfg.SQLFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse SQL file %s, %v", cfg.SQLFilePath, err)
+		}
+		if len(tables) == 0 {
+			return nil, fmt.Errorf("no tables found in SQL file %s,%v", cfg.SQLFilePath, err)
+		}
+
+		return tables, nil
 	default:
 		return nil, fmt.Errorf("unsupported database type %s", sourceDB)
 	}
