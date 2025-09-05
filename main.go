@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/SusheelSathyaraj/DataMigrationTool/config"
 	"github.com/SusheelSathyaraj/DataMigrationTool/migration"
@@ -57,6 +58,17 @@ func isValidDatabase(db string, slice []string) bool {
 	return false
 }
 
+// usage information
+func printUsage() {
+	fmt.Println("Usage Example:")
+	fmt.Println(" ./binary --source=mysql --target=postgresql --mode=full")
+	fmt.Println(" ./binary --source=mongodb --target=mysql --mode=full --workers=8 --backup")
+	fmt.Println(" make run ARGS=\"--source=mysql --target=postgresql --mode=full\"")
+	fmt.Println()
+	fmt.Println("Available Options:")
+	flag.PrintDefaults()
+}
+
 func main() {
 
 	//defining CLI for user input
@@ -72,13 +84,106 @@ func main() {
 	validate := flag.Bool("validate", true, "Enable data validation")
 	backup := flag.Bool("backup", false, "Create Backup before migration")
 
+	//Advanced Options
+	showVersion := flag.Bool("version", false, "Show version information")
+	showHelp := flag.Bool("help", false, "Show detailed help information")
+	listSnapshots := flag.Bool("list-snapshots", false, "List all available rollback snapshots")
+	rollbackSnapshot := flag.String("rollback", "", "ROllback using specific snapshot ID")
+	cleanupSnapshots := flag.String("cleanup-snapshots", "", "Cleanup snapshots older than duration(eg. '30d', '1h')")
+	dryRun := flag.Bool("dry-run", false, "Performs validation and planning without actual migration")
+
+	//custom usage function
+	flag.Usage = func() {
+		printUsage()
+	}
+
 	//parsing the user input
 	flag.Parse()
+
+	//Hanlding special commands first
+	if *showVersion {
+		fmt.Println("DataMigration Tool v1.0")
+		fmt.Println("Built with Go", runtime.Version())
+		fmt.Println("Support: MySQL, PostgreSQL, MongoDB")
+		os.Exit(0)
+	}
+
+	if *showHelp {
+		printUsage()
+		os.Exit(0)
+	}
 
 	//Loading config from config.yaml
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Error loading config %v", err)
+	}
+
+	fmt.Printf("Configuration loaded from %s \n", *configPath)
+
+	//Handling rollback command
+	if *rollbackSnapshot != "" {
+		fmt.Printf("Initiating Rollback for Snapshot %s\n", *rollbackSnapshot)
+
+		//creating a dummy engine for rollback
+		targetClient := createDatabaseClient(*targetDB, cfg)
+		if err := targetClient.Connect(); err != nil {
+			log.Fatalf("Failed to connect to target database, %v", err)
+		}
+		defer targetClient.Close()
+
+		dummyConfig := migration.MigrationConfig{TargetDb: *targetDB}
+		engine := migration.NewMigrationEngine(dummyConfig, nil, targetClient)
+
+		if err := engine.RollbackbySnapshotID(*rollbackSnapshot); err != nil {
+			log.Fatalf("Rollback Failed %v", err)
+		}
+		fmt.Printf("Rollback completed successful for snapshot %s\n", *rollbackSnapshot)
+		os.Exit(0)
+	}
+
+	//handling snapshot listing
+	if *listSnapshots {
+		//creating a dummy engine to access rollback manager
+		dummyConfig := migration.MigrationConfig{}
+		engine := migration.NewMigrationEngine(dummyConfig, nil, nil)
+
+		snapshots, err := engine.ListAvailableSnapshots()
+		if err != nil {
+			log.Fatalf("Failed to list snapshot, %v", err)
+		}
+
+		if len(snapshots) == 0 {
+			fmt.Println("No rollback snapshots, %v", err)
+		} else {
+			fmt.Println("Available Rollback Snapshot (%d):\n", len(snapshots))
+			fmt.Println("ID		| Date		| Source->Target		| Status	| Tables")
+			for _, snapshot := range snapshots {
+				fmt.Printf("%-28s | %-19s | %-15s | %-8s | %d\n",
+					&snapshot.ID[:28],
+					&snapshot.Timestamp.Format("2025-05-11 15:04:50"),
+					snapshot.SourceDB+"->"+&snapshot.TargetDB,
+					&snapshot.Status, len(snapshot.Tables))
+			}
+		}
+		os.Exit(0)
+	}
+
+	//handling clean-up command
+	if *cleanupSnapshots != "" {
+		maxAge, err := time.ParseDuration(*cleanupSnapshots)
+		if err != nil {
+			log.Fatalf("Invalid duration format, %v", err)
+		}
+
+		dummyConfig := migration.MigrationConfig{}
+		engime := migration.NewMigrationEngine(dummyConfig, nil, nil)
+
+		if err := engime.CleanupOldSnapshots(maxAge); err != nil {
+			log.Fatalf("Cleanup failed %v", err)
+		}
+		fmt.Printf("Cleanup completed for snapshots older than %s\n", maxAge)
+		os.Exit(0)
 	}
 
 	//validate input
