@@ -125,4 +125,41 @@ test-all:
 	@chmod +x run_tests.sh
 	@./run_tests.sh
 
+mocks:
+	@echo "Generating mocks..."
+	@if command -v mockgen >/dev/null 2>&1; then \
+		mockgen -source=database/interface.go -destination=tests/mocks/database_mock.go; \
+		echo "Mocks generated"
+	else \
+		echo "mockgen not installed. Run go install github.com/golang/mock/mockgen@latest"; \
+	fi
+
+docs:
+	@echo "Generating Documentation..."
+	@if command -v godoc >/dev/null 2>&1; then \
+		echo "Documentation Server: http://github.com/SusheelSathyaraj/DataMigrationTool/"
+		godoc -http=:6060; \
+	else \
+		echo "godoc not installed. Run go install golang.org/x/tools/cmd/godoc@latest"; \
+	fi
+
+update-docs:
+	@echo "Checking fo Dependcies update"
+	@go list -u -m all
+	@echo "To update: go get -u ./..."
+
+profile: build
+	@echo "Running CPU profiling..."
+	@mkdir -p test_results
+	@go test -cpuprofile=test_results/cpu.prof -bench=. ./...
+	@echo "CPU profile: test_results/cpu/prof"
+	@echo "View with: go tool pprof test_results/cpu.prof"
+
+profile-mem: build
+	@echo "Running Memory profiling"
+	@mkdir -p test_results
+	@go test -memprofle=test_results/mem.prof -bench=. ./...
+	@echo "Memory Profile: test_results/mem/prof"
+	@echo "View with: go tool pprof test_results/mem.prof"
+
  
