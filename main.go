@@ -309,104 +309,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	//printing success results
-	result.Print()
-
-	fmt.Printf("\n Migration Completed successfully")
-	fmt.Printf("\n Migrated %d rows across %d tables from source database %s to target database %s in %v",
-		result.TotalRowsMigrated, result.TotalTablesProcessed, *sourceDB, *targetDB, result.Duration)
-
-	// fetch functionality of the source database tables
-	fmt.Println("\n Fetching data from the source database...")
-	var results []map[string]interface{}
-
-	if *concurrent && len(tables) > 1 {
-		fmt.Printf("Using Concurrent processing with %d workers ...\n", *workers)
-		results, err = sourceClient.FetchAllDataConcurrently(tables, *workers)
-	} else {
-		fmt.Printf("Using sequential processing...\n")
-		results, err = sourceClient.FetchAllData(tables)
-	}
-
-	if err != nil {
-		log.Fatalf("failed to fetch data %v", err)
-	}
-	fmt.Printf("Fetched %d rows of data:", len(results))
-
-	//Handling target database
-	if *targetDB != "" {
-		fmt.Printf("Preparing to migrate data to %s.. ", *targetDB)
-
-		var targetClient database.DatabaseClient
-
-		switch strings.ToLower(*targetDB) {
-		case "mysql":
-			targetClient = database.NewMYSQLClientFromConfig(cfg)
-		case "postgresql":
-			targetClient = database.NewPostgreSQLClientFromConfig(cfg)
-		case "mongodb":
-			targetClient = database.NewMongoDBClientFromConfig(cfg)
-		default:
-			log.Fatalf("unsupported database target type %s", *targetDB)
-		}
-
-		if err := targetClient.Connect(); err != nil {
-			log.Fatalf("failed to connect to the target %s database, %v", *targetDB, err)
-		}
-		defer targetClient.Close()
-
-		fmt.Printf("Successfully connected to the target %s database", *targetDB)
-
-		fmt.Printf("Importing Data to target database")
-
-		if *concurrent && len(results) > *batchsize {
-			fmt.Printf("Using Concurrent batch processing with batch size %d...\n", *batchsize)
-			if err = targetClient.ImportDataConcurrently(results, *batchsize); err != nil {
-				log.Fatalf("Failed to import data concurrently: %v", err)
-			}
-		} else {
-			fmt.Println("Using sequential import...")
-			if err = targetClient.ImportData(results); err != nil {
-				log.Fatalf("Failed to import data: %v", err)
-			}
-		}
-
-		if err != nil {
-			log.Fatalf("failed to import data, %v", err)
-		}
-		fmt.Println("Data Migration completed successfully !!!")
-	}
-	fmt.Println("Migration Process completed!!")
-
-	// Print success results
-	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
-	fmt.Printf("🎉 MIGRATION COMPLETED SUCCESSFULLY!\n")
-	fmt.Printf(strings.Repeat("=", 60) + "\n")
-
-	result.Print()
-
 	// Success summary
 	totalTime := time.Since(startTime)
 	avgSpeed := float64(result.TotalRowsMigrated) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Performance Summary:\n")
-	fmt.Printf("   ⚡ Speed: %.0f rows/second\n", avgSpeed)
-	fmt.Printf("   📈 Throughput: %.0f rows/minute\n", avgSpeed*60)
-	fmt.Printf("   🏆 Efficiency: %.1f tables/minute\n", float64(result.TotalTablesProcessed)/totalTime.Minutes())
+	// Print success results
+	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+	fmt.Printf("MIGRATION COMPLETED SUCCESSFULLY!\n")
+	fmt.Printf(strings.Repeat("=", 60) + "\n")
+
+	result.Print()
+
+	fmt.Printf("\n Performance Summary:\n")
+	fmt.Printf(" Speed: %.0f rows/second\n", avgSpeed)
+	fmt.Printf(" Throughput: %.0f rows/minute\n", avgSpeed*60)
+	fmt.Printf(" Efficiency: %.1f tables/minute\n", float64(result.TotalTablesProcessed)/totalTime.Minutes())
 
 	if result.TotalRowsMigrated > 100000 {
-		fmt.Printf("   🚀 High-volume migration completed!\n")
+		fmt.Printf(" High-volume migration completed!\n")
 	}
 
 	// Cleanup suggestions
 	if *backup {
-		fmt.Printf("\n💡 Management Commands:\n")
-		fmt.Printf("   📋 List snapshots: ./binary --list-snapshots\n")
-		fmt.Printf("   🧹 Cleanup old snapshots: ./binary --cleanup-snapshots=30d\n")
+		fmt.Printf("\n Management Commands:\n")
+		fmt.Printf(" List snapshots: ./binary --list-snapshots\n")
+		fmt.Printf(" Cleanup old snapshots: ./binary --cleanup-snapshots=30d\n")
 	}
 
-	fmt.Printf("\n✨ Migration completed successfully in %v\n", totalTime)
-	fmt.Printf("🎯 Ready for production use!\n")
+	fmt.Printf("\n Migration completed successfully in %v\n", totalTime)
+	fmt.Printf(" Ready for production use!\n")
 }
 
 // helper function for handling mongodb parsing logic and SQL table discovery
@@ -444,5 +375,3 @@ func getTablesOrCollections(sourceDB string, cfg *config.Config, sourceClient da
 		return nil, fmt.Errorf("unsupported database type %s", sourceDB)
 	}
 }
-
-//ToDo: check on fetch block
