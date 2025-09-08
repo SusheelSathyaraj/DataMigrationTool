@@ -169,12 +169,12 @@ func main() {
 		}
 
 		if len(snapshots) == 0 {
-			fmt.Println("No rollback snapshots, %v", err)
+			fmt.Printf("No rollback snapshots, %v", err)
 		} else {
-			fmt.Println("Available Rollback Snapshot (%d):\n", len(snapshots))
+			fmt.Printf("Available Rollback Snapshot (%d):\n", len(snapshots))
 			fmt.Println("ID		| Date		| Source->Target		| Status	| Tables")
 			for _, snapshot := range snapshots {
-				fmt.Printf("%-28s | %-19s | %-15s | %-8s | %d\n",
+				fmt.Printf("%-28s | %-19s | %-15s | %-8d | %d\n",
 					snapshot.ID[:28],
 					snapshot.Timestamp.Format("2025-05-11 15:04:50"),
 					snapshot.SourceDB+"->"+snapshot.TargetDB,
@@ -203,7 +203,7 @@ func main() {
 
 	//validate input
 	if err := validateInput(*sourceDB, *targetDB, *mode); err != nil {
-		fmt.Println(" Validation Error: %v", err)
+		fmt.Printf(" Validation Error: %v", err)
 		printUsage()
 		os.Exit(1)
 	}
@@ -263,7 +263,7 @@ func main() {
 
 	//exiting early when it is dry run after discovery
 	if *dryRun {
-		fmt.Println("\n Dry Run Complete \n")
+		fmt.Printf("\n Dry Run Complete \n")
 		fmt.Printf("Migrating %d %s from %s to %s \n", len(tables), entityType, *sourceDB, *targetDB)
 		fmt.Printf("Run without --dry-run to perform actual migration \n")
 		os.Exit(0)
