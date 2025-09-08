@@ -143,7 +143,7 @@ docs:
 		echo "godoc not installed. Run go install golang.org/x/tools/cmd/godoc@latest"; \
 	fi
 
-update-docs:
+update-deps:
 	@echo "Checking fo Dependcies update"
 	@go list -u -m all
 	@echo "To update: go get -u ./..."
@@ -162,4 +162,87 @@ profile-mem: build
 	@echo "Memory Profile: test_results/mem/prof"
 	@echo "View with: go tool pprof test_results/mem.prof"
 
- 
+release: test-all build-all
+	@echo "Preparing Release $(VERSION)..."
+	@mkdir -p release
+	@cp dist/* release/
+	@cp README.md LICENSE release/
+	@cd release && tar -czf $(BINARY_NAME)-$(VERSION).tar.gz *
+	@echo "Release Package: release/$(BINARY_NAME)-$(VERSION).tar.gz"
+
+tag:
+	@if [ -z "$(TAG)" ]; then \
+		echo "TAG is required. Usage: make tag TAG=v1.0.0"; \
+		exit 1; \
+	fi
+	@echo "Creating tag $(TAG)..."
+	@git tag -a $(TAG) -m "Release $(TAG)"
+	@git push origin $(TAG)
+	@echo "Tag $(TAG) created and pushed"
+
+cleanup-snapshots: build
+	@echo "Cleaning old snapshots..."
+	@$(BINARY_PATH) --cleanup-snapshots=168h
+	@echo "Snapshot Cleanup Completed"
+
+list-snapshots: build
+	@echo "Listing migration snapshots..."
+	@$(BINARY_PATH) --list-snapshots
+
+stats:
+	@echo "Project Statistics..."
+	@echo "Total Files: $$(find . -name '*.go' | wc -l)"
+	@echo "Lines of Code: $$(find . -name '*.go' -exec wc -l {} + | tail -n1 | awk '{print $$1}')"
+	@echo "Test Files $$(find . -name '*_test.go' | wc -l)"
+	@echo "Dependencies: $$(go list -m all | wc -l)"
+	@echo "Latest Tag: $$(git describe --tags --abbrev=0 2>/dev/null || echo 'No Tags')"
+
+##Help, Shows Available Commands
+help:
+	@echo "Data Migration Tool - Makefile Commands"
+	@echo ""
+	@echo "Development:"
+	@echo "	fmt 			Format Go Code"
+	@echo "	vet 			Run go vet analysis"
+	@echo "	lint 			Run golangci-lint"
+	@echo "	security 		Check for security vulnerabilities"
+	@echo "	deps 			Install Dependencies"
+	@echo "	audit 			Audit Dependencies for vulnerabilities"
+	@echo ""
+	@echo "	Build:"
+	@echo "	clean	 		Clean build artifacts"
+	@echo "	build	 		Build binary"
+	@echo "	build-all 		Build for multiple platforms"
+	@echo " install			Install binary to system"
+	@echo ""
+	@echo "	Run:"
+	@echo "	run ARGS=\"...\" Run with arguments"
+	@echo "	run-example		Run example migration"
+	@echo "	version 		Show Version"
+	@echo " app-help		Show application help"
+	@echo ""
+	@echo "	Testing:"
+	@echo "	test			Run unit tests"
+	@echo "	test-coverage	Run tests with coverage"
+	@echo "	test-race	 	Run tests with race detection"
+	@echo " test-bench		Run benchmark tests"
+	@echo " test-integration	Run integration tests"
+	@echo " test-all		Run comprehensive test suite"
+	@echo ""
+	@echo "	Utilities:"
+	@echo "	mocks 			Generate mocks"
+	@echo "	docs			Generate Documentation"
+	@echo "	update-deps 	Check Dependcy updates"
+	@echo " profile			CPU profiling"
+	@echo " profile-mem		Memory profiling"
+	@echo " stats			Show project Statistics"
+	@echo ""
+	@echo "	Maintenance:"
+	@echo "	cleanup-snapshots 	Clean old migration snapshots"
+	@echo "	list-snapshots	List migration snapshots"
+	@echo ""
+	@echo "	Examples:"
+	@echo "	make run ARGS=\"--source=mysql --target=postgresql --mode=full\"
+	@echo " make test-coverage"
+	@echo " make release"
+	@echo " make tag TAG=v1.2.0"	
