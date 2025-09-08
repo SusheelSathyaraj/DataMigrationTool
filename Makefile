@@ -77,9 +77,20 @@ install: build
 	@echo "Installing $(BINARY_NAME)..."
 	@sudo mv $(BINARY_NAME) /usr/local/bin/
 	@echo "$(BINARY_NAME) installed to /usr/local/bin/"
-	
+
 run: build
-	@echo "Running binary with arguments: $(ARGS)"
-	./binary $(ARGS)
+	@echo "Running $(BINARY_NAME) with arguments: $(ARGS)"
+	@$(BINARY_PATH) $(ARGS)
+
+run-example: build
+	@echo "Running example migration..."
+	@$(BINARY_PATH) --source=mysql --target=postgresql --mode=full --dry-run
+
+version: build
+	@$(BINARY_PATH) --version
+
+app-help: build
+	@$(BINARY_PATH) --help
+	
 test: run
 	go test -v ./...
