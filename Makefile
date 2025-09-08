@@ -91,6 +91,38 @@ version: build
 
 app-help: build
 	@$(BINARY_PATH) --help
-	
-test: run
-	go test -v ./...
+
+test:
+	@echo "Running unit tests..."
+	@go test -v ./...
+	@echo "Unit tests completed"
+
+test-coverage:
+	@echo "Running tests with coverage report"
+	@mkdir -p test_results
+	@go test -v -cover -coverprofile=test_results/coverage.out ./...
+	@go tool cover -html=test_results/coverage.out -o test_results/coverage.html
+	@go tool cover -func=test_results/coverage.out | grep total
+
+test-race:
+	@echo "Running tests with race detection..."
+	@go test -race ./...
+	@echo "Race condition tests completed"
+
+test-bench:
+	@echo "Running benchmark tests..."
+	@mkdir -p test_results
+	@go test -bench=. -benchmem ./... | tee test_results/benchmark_results.log
+	@echo "Benchmark Results: test_results/benchmark_results.log"
+
+test-integration:
+	@echo "Running integration tests..."
+	@go test -v ./tests/...
+	@echo "Integration Test completed"
+
+test-all:
+	@echo "Running comprehensive test suite"
+	@chmod +x run_tests.sh
+	@./run_tests.sh
+
+ 
